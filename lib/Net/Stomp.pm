@@ -6,7 +6,7 @@ use IO::Select;
 use Net::Stomp::Frame;
 use base 'Class::Accessor::Fast';
 __PACKAGE__->mk_accessors(
-    qw(hostname port select serial session_id socket ssl ssl_options subscriptions));
+    qw(hostname login passcode port select serial session_id socket ssl ssl_options subscriptions));
 our $VERSION = '0.34';
 
 sub new {
@@ -50,6 +50,8 @@ sub connect {
     # Setting initial values for session id, as given from
     # the stomp server
     $self->session_id( $frame->headers->{session} );
+    $self->login( $conf->{login} );
+    $self->passcode( $conf->{passcode} );
 
     return $frame;
 }
