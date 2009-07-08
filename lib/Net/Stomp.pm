@@ -6,7 +6,7 @@ use IO::Select;
 use Net::Stomp::Frame;
 use base 'Class::Accessor::Fast';
 __PACKAGE__->mk_accessors(
-    qw(hostname port select serial session_id socket ssl ssl_options));
+    qw(hostname port select serial session_id socket ssl ssl_options subscriptions));
 our $VERSION = '0.34';
 
 sub new {
@@ -127,6 +127,9 @@ sub subscribe {
     my $frame = Net::Stomp::Frame->new(
         { command => 'SUBSCRIBE', headers => $conf } );
     $self->send_frame($frame);
+    my @subs = $self->subscriptions ;
+    push(@subs, $conf->{'destination'});
+    $self->subscriptions(@subs);
 }
 
 sub unsubscribe {
@@ -134,6 +137,9 @@ sub unsubscribe {
     my $frame = Net::Stomp::Frame->new(
         { command => 'UNSUBSCRIBE', headers => $conf } );
     $self->send_frame($frame);
+    my @subs = $self->subscriptions ;
+    @subs = grep { $_ != $conf->{'destination'} } @subs;
+    $self->subscriptions(@subs);
 }
 
 sub ack {
