@@ -141,7 +141,7 @@ sub unsubscribe {
         { command => 'UNSUBSCRIBE', headers => $conf } );
     $self->send_frame($frame);
     my $subs = $self->subscriptions ;
-    delete $subs->$conf->{'destination'}};
+    delete $subs->{$conf->{'destination'}};
     $self->subscriptions($subs);
 }
 
