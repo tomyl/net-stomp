@@ -63,6 +63,18 @@ sub disconnect {
     $self->socket->close;
 }
 
+sub _reconnect {
+    my $self = shift;
+    $self->socket->close;
+    $self->socket(undef);
+    $self->select(undef);
+    $self->_get_connection;
+    my %subs = $self->subscriptions;
+    for my $sub(keys %subs) {
+        $self->connect($subs{$sub});
+    }
+}
+
 sub can_read {
     my ( $self, $conf ) = @_;
     my $timeout = $conf->{timeout} || 0;
