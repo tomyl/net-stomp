@@ -129,9 +129,9 @@ sub subscribe {
     my $frame = Net::Stomp::Frame->new(
         { command => 'SUBSCRIBE', headers => $conf } );
     $self->send_frame($frame);
-    my @subs = $self->subscriptions ;
-    push(@subs, $conf->{'destination'});
-    $self->subscriptions(@subs);
+    my $subs = $self->subscriptions ||() ;
+    $subs->{$conf->{'destination'}} = $conf;
+    $self->subscriptions($subs);
 }
 
 sub unsubscribe {
@@ -139,9 +139,9 @@ sub unsubscribe {
     my $frame = Net::Stomp::Frame->new(
         { command => 'UNSUBSCRIBE', headers => $conf } );
     $self->send_frame($frame);
-    my @subs = $self->subscriptions ;
-    @subs = grep { $_ != $conf->{'destination'} } @subs;
-    $self->subscriptions(@subs);
+    my $subs = $self->subscriptions ;
+    delete $subs->$conf->{'destination'}};
+    $self->subscriptions($subs);
 }
 
 sub ack {
