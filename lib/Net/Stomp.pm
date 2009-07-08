@@ -12,13 +12,19 @@ our $VERSION = '0.34';
 sub new {
     my $class = shift;
     my $self  = $class->SUPER::new(@_);
+
+    $self->_get_connection;
+    return $self;
+}
+
+sub _get_connection {
+    my $self = shift;
     my ($socket);
     my %sockopts = (
         PeerAddr => $self->hostname,
         PeerPort => $self->port,
         Proto    => 'tcp'
     );
-
     if ( $self->ssl ) {
         eval { require IO::Socket::SSL };
         die
@@ -37,7 +43,6 @@ sub new {
     $select->add($socket);
     $self->select($select);
 
-    return $self;
 }
 
 sub connect {
