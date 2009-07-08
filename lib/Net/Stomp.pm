@@ -69,6 +69,7 @@ sub _reconnect {
     $self->socket(undef);
     $self->select(undef);
     $self->_get_connection;
+    $self->connect({login => $self->login, passcode => $self->passcode});
     my %subs = $self->subscriptions;
     for my $sub(keys %subs) {
         $self->connect($subs{$sub});
