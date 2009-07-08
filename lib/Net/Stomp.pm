@@ -130,6 +130,7 @@ sub subscribe {
         { command => 'SUBSCRIBE', headers => $conf } );
     $self->send_frame($frame);
     my $subs = $self->subscriptions ||() ;
+    delete $subs->{$conf->{'destination'}};
     $subs->{$conf->{'destination'}} = $conf;
     $self->subscriptions($subs);
 }
