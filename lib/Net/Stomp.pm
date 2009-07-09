@@ -175,13 +175,22 @@ sub send_frame {
 
     #     warn "send [" . $frame->as_string . "]\n";
     $self->socket->print( $frame->as_string );
+    my $connected = $self->socket->connected;
+    unless (defined $connected) {
+        $self->_reconnect;
+        $self->send_frame($frame);
+    }
 }
 
 sub receive_frame {
     my $self = shift;
 
-    my $frame = Net::Stomp::Frame->parse( $self->socket );
-
+    my $frame;
+    eval { $frame = Net::Stomp::Frame->parse( $self->socket ) };
+    if ($@) {
+        $self->_reconnect;
+        $self->receive_frame;
+    }
     #     warn "receive [" . $frame->as_string . "]\n";
     return $frame;
 }
