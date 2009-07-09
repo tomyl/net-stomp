@@ -70,13 +70,19 @@ sub disconnect {
 
 sub _reconnect {
     my $self = shift;
-    $self->socket->close;
-    $self->socket(undef);
-    $self->select(undef);
-    $self->_get_connection;
+    if ($self->socket) {
+        $self->socket->close;
+        $self->socket(undef);
+        $self->select(undef);
+    }
+    eval {$self->_get_connection};
+    if ($@) { 
+        sleep(5);
+        $self->_reconnect;
+    }
     $self->connect({login => $self->login, passcode => $self->passcode});
     for my $sub(keys %{$self->subscriptions}) {
-        $self->connect($self->subscriptions->{$sub});
+        $self->subscribe($self->subscriptions->{$sub});
     }
 }
 
