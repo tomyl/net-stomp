@@ -195,7 +195,7 @@ sub receive_frame {
     eval { $frame = Net::Stomp::Frame->parse( $self->socket ) };
     if ($@) {
         $self->_reconnect;
-        $self->receive_frame;
+        $frame = $self->receive_frame;
     }
     #     warn "receive [" . $frame->as_string . "]\n";
     return $frame;
