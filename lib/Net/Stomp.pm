@@ -34,10 +34,10 @@ sub _get_connection {
         $socket = IO::Socket::SSL->new(%sockopts);
     } else {
         $socket = IO::Socket::INET->new(%sockopts);
+        binmode($socket);
     }
     die "Error connecting to " . $self->hostname . ':' . $self->port . ": $!"
         unless $socket;
-    binmode($socket);
     $self->socket($socket);
     my $select = IO::Select->new();
     $select->add($socket);
