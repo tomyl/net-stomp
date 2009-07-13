@@ -76,9 +76,9 @@ sub _reconnect {
         $self->select(undef);
     }
     eval {$self->_get_connection};
-    if ($@) { 
+    while ($@) { 
         sleep(5);
-        $self->_reconnect;
+        eval {$self->_get_connection};
     }
     $self->connect({login => $self->login, passcode => $self->passcode});
     for my $sub(keys %{$self->subscriptions}) {
