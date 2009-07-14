@@ -6,24 +6,48 @@ use IO::Select;
 use Net::Stomp::Frame;
 use base 'Class::Accessor::Fast';
 __PACKAGE__->mk_accessors(
-    qw(hostname login passcode port select serial session_id socket ssl ssl_options subscriptions));
+    qw( _cur_host failover hostname hosts login passcode port select serial session_id socket ssl ssl_options subscriptions transportopts uris));
 our $VERSION = '0.34';
 
 sub new {
     my $class = shift;
     my $self  = $class->SUPER::new(@_);
 
-    $self->_get_connection;
+    my @hosts = ();
+    if ($self->failover && $self->failover =~ /^(failover:(\/\/)?)+\(*([a-zA-Z0-9\.:\/i,-]+)\)*\??([a-zA-Z0-9=]*)$/i) {
+        foreach my $host (split(/,/,$3)) {
+            my ($hostname, $port) = ($host =~ /\w+:\/\/([a-zA-Z0-9\-\.\/]+):(\d+)/);
+            push(@hosts, {hostname => $hostname, port => $port});
+        }
+    }
+    $self->hosts(@hosts);
+
+    eval { $self->_get_connection};
+    while($@) {
+        sleep(5);
+        eval { $self->_get_connection};
+    }
     return $self;
 }
 
 sub _get_connection {
     my $self = shift;
+    if (defined $self->hosts) {
+        my @hosts = @{$self->hosts};
+        if (defined $self->_cur_host && ($self->_cur_host < scalar @hosts -1) ) {
+            $self->_cur_host($self->_cur_host+1);
+        } else {
+            $self->_cur_host(0);
+        }
+        $self->hostname($hosts[$self->_cur_host]->{hostname});
+        $self->port($hosts[$self->_cur_host]->{port});
+    }
     my ($socket);
     my %sockopts = (
         PeerAddr => $self->hostname,
         PeerPort => $self->port,
-        Proto    => 'tcp'
+        Proto    => 'tcp',
+        Timeout  => 5
     );
     if ( $self->ssl ) {
         eval { require IO::Socket::SSL };
@@ -78,6 +102,11 @@ sub _reconnect {
     eval {$self->_get_connection};
     while ($@) { 
         sleep(5);
+        if ($self->socket) {
+            $self->socket->close;
+            $self->socket(undef);
+            $self->select(undef);
+        }
         eval {$self->_get_connection};
     }
     $self->connect({login => $self->login, passcode => $self->passcode});
