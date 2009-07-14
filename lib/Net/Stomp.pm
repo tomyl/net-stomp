@@ -192,7 +192,9 @@ sub receive_frame {
     my $self = shift;
 
     my $frame;
-    eval { $frame = Net::Stomp::Frame->parse( $self->socket ) };
+    if ( $self->can_read({timeout => 1}) ) { 
+        eval { $frame = Net::Stomp::Frame->parse( $self->socket ) };
+    }
     if ($@) {
         $self->_reconnect;
         $frame = $self->receive_frame;
