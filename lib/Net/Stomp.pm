@@ -117,7 +117,8 @@ sub _reconnect {
 
 sub can_read {
     my ( $self, $conf ) = @_;
-    my $timeout = $conf->{timeout} || 0;
+    $conf ||= {};
+    my $timeout = exists $conf->{timeout} ? $conf->{timeout} : 0;
     return $self->select->can_read($timeout) || 0;
 }
 
@@ -218,15 +219,29 @@ sub send_frame {
 }
 
 sub receive_frame {
-    my $self = shift;
+    my ($self, $conf) = @_;
+
+    # default is to block until we can read something.
+    $conf ||= { timeout => undef };
 
     my $frame;
-    if ( $self->can_read({timeout => 1}) ) { 
-        eval { $frame = Net::Stomp::Frame->parse( $self->socket ) };
-    }
-    if ($@) {
-        $self->_reconnect;
-        $frame = $self->receive_frame;
+    while (!$frame) {
+
+        # If the user passed in { timeout => 1 } then we wait for up to a
+        # second to read something. If we get no data in that time, then return
+        # undef.
+
+        # But if we get an error (cos we aren't connected) then we should
+        # reconnect and try again.
+        if ( $self->can_read($conf) ) {
+            eval {
+                $frame = Net::Stomp::Frame->parse( $self->socket );
+                1;
+            } or $self->_reconnect;
+        }
+        else {
+            return;
+        }
     }
     #     warn "receive [" . $frame->as_string . "]\n";
     return $frame;
@@ -445,6 +460,12 @@ This blocks and returns you the next Stomp frame.
   warn $frame->body; # do something here
 
 The header bytes_message is 1 if the message was a BytesMessage.
+
+By default this method will block until a frame can be returned. If you wish to
+wait for a specified time pass a C<timeout> argument:
+
+  # Wait half a second for a frame, else return undef
+  $stomp->receive_frame({ timeout => 0.5 })
 
 =head2 can_read
 
