@@ -4,19 +4,36 @@ use warnings;
 use IO::Socket::INET;
 use IO::Select;
 use Net::Stomp::Frame;
+use Carp;
 use base 'Class::Accessor::Fast';
-__PACKAGE__->mk_accessors(
-    qw( _cur_host failover hostname hosts login passcode port select serial session_id socket ssl ssl_options subscriptions transportopts uris));
 our $VERSION = '0.34';
+__PACKAGE__->mk_accessors( qw(
+    _cur_host failover hostname hosts port select serial session_id socket ssl
+    ssl_options subscriptions _connect_headers
+) );
 
 sub new {
     my $class = shift;
     my $self  = $class->SUPER::new(@_);
 
+    # We are not subscribed to anything at the start
+    $self->subscriptions( {} );
+
+    $self->select( IO::Select->new );
     my @hosts = ();
-    if ($self->failover && $self->failover =~ /^(failover:(\/\/)?)+\(*([a-zA-Z0-9\.:\/i,-]+)\)*\??([a-zA-Z0-9=]*)$/i) {
-        foreach my $host (split(/,/,$3)) {
-            my ($hostname, $port) = ($host =~ /\w+:\/\/([a-zA-Z0-9\-\.\/]+):(\d+)/);
+
+    # failover://tcp://primary:61616
+    # failover:(tcp://primary:61616,tcp://secondary:61616)?randomize=false
+
+    if ($self->failover) {
+        my ($uris, $opts) = $self->failover =~ m{^failover:(?://)? \(? (.*?) \)? (?: \? (.*?) ) ?$}ix;
+
+        confess "Unable to parse failover uri: " . $self->failover
+                unless $uris;
+
+        foreach my $host (split(/,/,$uris)) {
+            my ($hostname, $port) = ($host =~ m{^\w+://([a-zA-Z0-9\-./]+):([0-9]+)$})
+              || confess "Unable to parse failover component: '$host'";
             push(@hosts, {hostname => $hostname, port => $port});
         }
     }
@@ -32,15 +49,14 @@ sub new {
 
 sub _get_connection {
     my $self = shift;
-    if (defined $self->hosts) {
-        my @hosts = @{$self->hosts};
-        if (defined $self->_cur_host && ($self->_cur_host < scalar @hosts -1) ) {
+    if (my $hosts = $self->hosts) {
+        if (defined $self->_cur_host && ($self->_cur_host < $#{$hosts} ) ) {
             $self->_cur_host($self->_cur_host+1);
         } else {
             $self->_cur_host(0);
         }
-        $self->hostname($hosts[$self->_cur_host]->{hostname});
-        $self->port($hosts[$self->_cur_host]->{port});
+        $self->hostname($hosts->[$self->_cur_host]->{hostname});
+        $self->port($hosts->[$self->_cur_host]->{port});
     }
     my ($socket);
     my %sockopts = (
@@ -62,15 +78,17 @@ sub _get_connection {
     }
     die "Error connecting to " . $self->hostname . ':' . $self->port . ": $!"
         unless $socket;
+
+    $self->select->remove($self->socket) if $self->socket;
+
+    $self->select->add($socket);
     $self->socket($socket);
-    my $select = IO::Select->new();
-    $select->add($socket);
-    $self->select($select);
 
 }
 
 sub connect {
     my ( $self, $conf ) = @_;
+
     my $frame = Net::Stomp::Frame->new(
         { command => 'CONNECT', headers => $conf } );
     $self->send_frame($frame);
@@ -79,8 +97,7 @@ sub connect {
     # Setting initial values for session id, as given from
     # the stomp server
     $self->session_id( $frame->headers->{session} );
-    $self->login( $conf->{login} );
-    $self->passcode( $conf->{passcode} );
+    $self->_connect_headers( $conf );
 
     return $frame;
 }
@@ -90,26 +107,20 @@ sub disconnect {
     my $frame = Net::Stomp::Frame->new( { command => 'DISCONNECT' } );
     $self->send_frame($frame);
     $self->socket->close;
+    $self->select->remove($self->socket);
 }
 
 sub _reconnect {
     my $self = shift;
     if ($self->socket) {
         $self->socket->close;
-        $self->socket(undef);
-        $self->select(undef);
     }
-    eval {$self->_get_connection};
+    eval { $self->_get_connection };
     while ($@) { 
         sleep(5);
-        if ($self->socket) {
-            $self->socket->close;
-            $self->socket(undef);
-            $self->select(undef);
-        }
-        eval {$self->_get_connection};
+        eval { $self->_get_connection };
     }
-    $self->connect({login => $self->login, passcode => $self->passcode});
+    $self->connect( $self->_connect_headers );
     for my $sub(keys %{$self->subscriptions}) {
         $self->subscribe($self->subscriptions->{$sub});
     }
@@ -182,10 +193,8 @@ sub subscribe {
     my $frame = Net::Stomp::Frame->new(
         { command => 'SUBSCRIBE', headers => $conf } );
     $self->send_frame($frame);
-    my $subs = $self->subscriptions ||() ;
-    delete $subs->{$conf->{'destination'}};
+    my $subs = $self->subscriptions;
     $subs->{$conf->{'destination'}} = $conf;
-    $self->subscriptions($subs);
 }
 
 sub unsubscribe {
@@ -193,9 +202,8 @@ sub unsubscribe {
     my $frame = Net::Stomp::Frame->new(
         { command => 'UNSUBSCRIBE', headers => $conf } );
     $self->send_frame($frame);
-    my $subs = $self->subscriptions ;
+    my $subs = $self->subscriptions;
     delete $subs->{$conf->{'destination'}};
-    $self->subscriptions($subs);
 }
 
 sub ack {
@@ -292,9 +300,20 @@ Net::Stomp - A Streaming Text Orientated Messaging Protocol Client
   $stomp->disconnect;
 
   # write your own frame
-   my $frame = Net::Stomp::Frame->new(
+  my $frame = Net::Stomp::Frame->new(
        { command => $command, headers => $conf, body => $body } );
   $self->send_frame($frame);
+
+  # connect with failover supporting similar URI to ActiveMQ
+  $stomp = Net::Stomp->new({ failover => "failover://tcp://primary:61616" })
+  # "?randomize=..." and other parameters are ignored currently
+  $stomp = Net::Stomp->new({ failover => "failover:(tcp://primary:61616,tcp://secondary:61616)?randomize=false" })
+
+  # Or in a more natural perl way
+  $stomp = Net::Stomp->new({ hosts => [
+    { hostname => 'primary', port => 61616 },
+    { hostname => 'secondary', port => 61616 },
+  ] });
 
 =head1 DESCRIPTION
 
@@ -328,7 +347,7 @@ For details on Stomp in ActiveMQ See L<http://activemq.apache.org/stomp.html>.
 =head2 new
 
 The constructor creates a new object. You must pass in a hostname and
-a port:
+a port or set a failover configuration:
 
   my $stomp = Net::Stomp->new( { hostname => 'localhost', port => '61613' } );
 
@@ -350,20 +369,32 @@ If you want to pass in L<IO::Socket::SSL> options:
     ssl_options => { SSL_cipher_list => 'ALL:!EXPORT' },
   } );
 
+=head3 Failover
+
+There is experiemental failover support in Net::Stomp. You can specify failover
+in a similar maner to ActiveMQ
+(L<http://activemq.apache.org/failover-transport-reference.html>) for
+similarity with Java configs or using a more natural method to perl of passing
+in an array-of-hashrefs in the C<hosts> parameter.
+
+Currently when ever Net::Stomp connects or reconnects it will simply try the
+next host in the list.
+
 =head2 connect
 
-This connects to the Stomp server. You must pass in a login and
-passcode.
+This connects to the Stomp server. You may pass in a C<login> and
+C<passcode> options.
 
-You may pass in 'client-id', which specifies the JMS Client ID which
-is used in combination to the activemqq.subscriptionName to denote a
-durable subscriber.
+You may also pass in 'client-id', which specifies the JMS Client ID which is
+used in combination to the activemqq.subscriptionName to denote a durable
+subscriber.
   
   $stomp->connect( { login => 'hello', passcode => 'there' } );
 
 =head2 send
 
-This sends a message to a queue or topic. You must pass in a destination and a body.
+This sends a message to a queue or topic. You must pass in a destination and a
+body.
 
   $stomp->send(
       { destination => '/queue/foo', body => 'test message' } );
