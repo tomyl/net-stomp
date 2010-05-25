@@ -531,10 +531,14 @@ L<Net::Stomp::Frame>.
 =head1 AUTHOR
 
 Leon Brocard <acme@astray.com>.
+Thom May <thom.may@betfair.com>.
+Ash Berlin <ash_github@firemirror.com>.
 
 =head1 COPYRIGHT
 
 Copyright (C) 2006-9, Leon Brocard
+Copyright (C) 2009, Thom May, Betfair.com
+Copyright (C) 2010, Ash Berlin, Net-a-Porter.com
 
 This module is free software; you can redistribute it or modify it
 under the same terms as Perl itself.
