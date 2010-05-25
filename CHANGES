@@ -1,6 +1,6 @@
 Revision history for Perl module Net::Stomp:
 
-0.35
+0.35 Tue May 25 15:55:36 BST 2010
   - add some examples
   - add support for SSL (thanks to Aleksandar Ivanisevic)
   - add send_transactional (based on Net::Stomp::Receipt, thanks
