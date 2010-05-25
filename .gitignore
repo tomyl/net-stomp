@@ -1,0 +1,9 @@
+/MANIFEST.bak
+*.swp
+/_build/
+/blib/
+/Build
+/Makefile
+/META.yml
+/MYMETA.yml
+/*.tar.gz

@@ -1,0 +1,10 @@
+^MYMETA.yml$
+^MANIFEST.bak$
+^Build$
+^Makefile
+
+\.tar\.gz$
+^\.git
+\.swp$
+^_build/
+^blib/
