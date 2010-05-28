@@ -1,5 +1,9 @@
 Revision history for Perl module Net::Stomp:
 
+0.36 Fri May 28 16:20::15 BST 2010
+  - Fix behaviour regression on constructor - 0.35 would look at ->new time if
+    no server could be reached. We now die after trying each server once.
+
 0.35 Tue May 25 15:55:36 BST 2010
   - add some examples
   - add support for SSL (thanks to Aleksandar Ivanisevic)
