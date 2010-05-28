@@ -39,11 +39,22 @@ sub new {
     }
     $self->hosts(@hosts);
 
-    eval { $self->_get_connection};
-    while($@) {
-        sleep(5);
-        eval { $self->_get_connection};
+    my $err;
+    {
+        local $@ = 'run me!';
+        while($@) {
+            eval { $self->_get_connection };
+            last unless $@;
+            if (!@hosts || $self->_cur_host == $#hosts ) {
+                # We've cycled through all setup hosts. Die now. Can't die because
+                # $@ is localized.
+                $err = $@;
+                last;
+            }
+            sleep(5);
+        }
     }
+    die $err if $err;
     return $self;
 }
 
