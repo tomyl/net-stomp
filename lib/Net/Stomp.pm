@@ -85,7 +85,7 @@ sub _get_connection {
         $socket = IO::Socket::SSL->new(%sockopts);
     } else {
         $socket = IO::Socket::INET->new(%sockopts);
-        binmode($socket);
+        binmode($socket) if $socket;
     }
     die "Error connecting to " . $self->hostname . ':' . $self->port . ": $!"
         unless $socket;
