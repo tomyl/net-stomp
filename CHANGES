@@ -2,6 +2,8 @@ Revision history for Perl module Net::Stomp:
 
   - Report a proper error if non-SSL STOMP server is not listening rather than
     "Can't use an undefined value as a symbol reference".
+  - Fix regression in can_read: it now defaults to waiting indefinitely.
+    (RT 58502)
 
 0.36 Fri May 28 16:20::15 BST 2010
   - Fix behaviour regression on constructor - 0.35 would look at ->new time if

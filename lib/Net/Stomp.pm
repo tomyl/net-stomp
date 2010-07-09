@@ -140,7 +140,7 @@ sub _reconnect {
 sub can_read {
     my ( $self, $conf ) = @_;
     $conf ||= {};
-    my $timeout = exists $conf->{timeout} ? $conf->{timeout} : 0;
+    my $timeout = exists $conf->{timeout} ? $conf->{timeout} : undef;
     return $self->select->can_read($timeout) || 0;
 }
 
@@ -239,9 +239,6 @@ sub send_frame {
 
 sub receive_frame {
     my ($self, $conf) = @_;
-
-    # default is to block until we can read something.
-    $conf ||= { timeout => undef };
 
     my $frame;
     while (!$frame) {
@@ -517,6 +514,8 @@ timeout in seconds:
   my $can_read = $stomp->can_read;
   my $can_read = $stomp->can_read({ timeout => '0.1' });
 
+C<undef> says block until something can be read, C<0> says to poll and return
+immediately.
 
 =head2 ack
 
