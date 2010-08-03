@@ -3,6 +3,8 @@
 ^Build$
 ^Makefile
 
+^\.DS_Store
+^Net-Stomp-.*
 \.tar\.gz$
 ^\.git
 \.swp$

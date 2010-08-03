@@ -7,3 +7,6 @@
 /META.yml
 /MYMETA.yml
 /*.tar.gz
+/Net-Stomp-*/
+/.DS_Store
+/Makefile.*
