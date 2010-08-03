@@ -42,6 +42,23 @@ sub as_string {
     $frame .= "\000";
 }
 
+# NBK - $sock->getline does buffered IO which screws up select.  Use
+# sysread one char at a time to avoid reading part of the next line.
+sub readline {
+    my($self, $socket, $terminator, $msg) = @_;
+
+    $terminator = "\n" unless defined($terminator);
+    $msg ||= "";
+
+    my $s = "";
+    while( 1 ) {
+        $socket->sysread($s, 1, length($s)) or die("Error reading $msg: $!");
+        last if substr($s, -1) eq $terminator;
+    }
+
+    return $s;
+}
+
 sub parse {
     my ( $package, $socket ) = @_;
     local $/ = "\n";
@@ -49,7 +66,7 @@ sub parse {
     # read the command
     my $command;
     while (1) {
-        $command = $socket->getline || die "Error reading command: $!";
+        $command = $package->readline($socket, "\n", "command");
         chop $command;
         last if $command;
     }
@@ -57,31 +74,29 @@ sub parse {
     # read headers
     my $headers;
     while (1) {
-        my $line = $socket->getline || die "Error reading header: $!";
+        my $line = $package->readline($socket, "\n", "header");
         chop $line;
         last if $line eq "";
-        my ( $key, $value ) = split /: ?/, $line, 2;
+        my ( $key, $value ) = split(/: ?/, $line, 2);
         $headers->{$key} = $value;
     }
 
     # read the body
     my $body;
+    my $c;
     if ( $headers->{"content-length"} ) {
-        $socket->read( $body, $headers->{"content-length"} )
+        $socket->sysread( $body, $headers->{"content-length"} + 1 )
             || die "Error reading body: $!";
-        $socket->getc;    # eat the trailing null
         $headers->{bytes_message} = 1;
     } else {
-        while (1) {
-            my $byte = $socket->getc;
-            die "Error reading body: $!" unless defined $byte;
-            last if $byte eq "\000";
-            $body .= $byte;
-        }
+	$body = $package->readline($socket, "\000", "body");
     }
-
+    # strip trailing null
+    $body =~ s/\000$//;
+    
     my $frame = Net::Stomp::Frame->new(
         { command => $command, headers => $headers, body => $body } );
+
     return $frame;
 }
 
