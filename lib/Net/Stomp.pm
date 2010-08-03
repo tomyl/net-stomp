@@ -6,7 +6,7 @@ use IO::Select;
 use Net::Stomp::Frame;
 use Carp;
 use base 'Class::Accessor::Fast';
-our $VERSION = '0.37';
+our $VERSION = '0.38';
 __PACKAGE__->mk_accessors( qw(
     _cur_host failover hostname hosts port select serial session_id socket ssl
     ssl_options subscriptions _connect_headers

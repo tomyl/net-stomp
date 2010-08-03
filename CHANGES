@@ -1,5 +1,10 @@
 Revision history for Perl module Net::Stomp:
 
+0.38 Tue Aug 03 13:58:10 BST 2010
+  - Fix an issue with IO::Handle buffering interfering with IO::Select. This
+    manifested as receive_frame hanging, or as if not all messages would get
+    delivered to the client. (RT 44629)
+
 0.37 Fri May 28 15:26:17 BST 2010
   - Report a proper error if non-SSL STOMP server is not listening rather than
     "Can't use an undefined value as a symbol reference".
