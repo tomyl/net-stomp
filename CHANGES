@@ -1,5 +1,16 @@
 Revision history for Perl module Net::Stomp:
 
+0.38_99  Fri Aug 27 00:11:08 BST 2010
+  - Reimplemented Net::Stomp::receive_frame() to properly handle STOMP frames
+    that have extraneous line feed characters after the NULL terminator, before
+    the next frame header (e.g., ActiveMQ).  (Implemented by Michael S. Fischer)
+  - Improve reading performace by reading large chunks and buffering
+  - Read buffer size can now be specified in Net::Stomp->new() with the
+    'bufsize' key.
+  - Possible incompatible change - Net::Stomp::Frame#parse method removed.
+    Hopefully no one was using this. If you were, RTFS and look at
+    Net::Stomp#receive_frame method.
+
 0.38 Tue Aug 03 13:58:10 BST 2010
   - Fix an issue with IO::Handle buffering interfering with IO::Select. This
     manifested as receive_frame hanging, or as if not all messages would get
