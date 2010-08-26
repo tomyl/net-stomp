@@ -9,12 +9,16 @@ use base 'Class::Accessor::Fast';
 our $VERSION = '0.38';
 __PACKAGE__->mk_accessors( qw(
     _cur_host failover hostname hosts port select serial session_id socket ssl
-    ssl_options subscriptions _connect_headers
+    ssl_options subscriptions _connect_headers bufsize
 ) );
 
 sub new {
     my $class = shift;
     my $self  = $class->SUPER::new(@_);
+
+    $self->bufsize(8192) unless $self->bufsize;
+
+    $self->{_framebuf} = "";
 
     # We are not subscribed to anything at the start
     $self->subscriptions( {} );
@@ -127,7 +131,7 @@ sub _reconnect {
         $self->socket->close;
     }
     eval { $self->_get_connection };
-    while ($@) { 
+    while ($@) {
         sleep(5);
         eval { $self->_get_connection };
     }
@@ -139,6 +143,16 @@ sub _reconnect {
 
 sub can_read {
     my ( $self, $conf ) = @_;
+
+    # If there is any data left in the framebuffer that we haven't read, return
+    # 'true'. But we don't want to spin endlessly, so only return true the
+    # first time. (Anything touching the _framebuf should update this flag when
+    # it does something.
+    if ( $self->{_framebuf_changed} && length $self->{_framebuf} ) {
+        $self->{_framebuf_changed} = 0;
+        return 1;
+    }
+
     $conf ||= {};
     my $timeout = exists $conf->{timeout} ? $conf->{timeout} : undef;
     return $self->select->can_read($timeout) || 0;
@@ -229,7 +243,7 @@ sub send_frame {
     my ( $self, $frame ) = @_;
 
     #     warn "send [" . $frame->as_string . "]\n";
-    $self->socket->print( $frame->as_string );
+    $self->socket->syswrite( $frame->as_string );
     my $connected = $self->socket->connected;
     unless (defined $connected) {
         $self->_reconnect;
@@ -237,30 +251,83 @@ sub send_frame {
     }
 }
 
+sub _read_data {
+    my ($self, $timeout) = @_;
+
+    return unless $self->select->can_read($timeout);
+    my $len = $self->socket->sysread($self->{_framebuf},
+                                     $self->bufsize,
+                                     length($self->{_framebuf} || ''));
+    $self->{_framebuf_changed} = 1;
+    return $len;
+}
+
+sub _read_headers {
+    my ($self) = @_;
+
+    if ($self->{_framebuf} =~ s/^\n*([^\n].*?)\n\n//s) {
+        $self->{_framebuf_changed} = 1;
+        my $raw_headers = $1;
+        if ($raw_headers =~ s/^(.+)\n//) {
+            $self->{_command} = $1;
+        }
+        foreach my $line (split(/\n/, $raw_headers)) {
+            my ($key, $value) = split(/\s*:\s*/, $line, 2);
+            $self->{_headers}->{$key} = $value;
+        }
+        return 1;
+    }
+    return 0;
+}
+
+sub _read_body {
+    my ($self) = @_;
+
+    my $h = $self->{_headers};
+    if ($h->{'content-length'}) {
+        if (length($self->{_framebuf}) >= $h->{'content-length'}) {
+            $self->{_framebuf_changed} = 1;
+            my $body = substr($self->{framebuf},
+                              0,
+                              $h->{'content-length'},
+                              undef );
+
+            # Trim the trailer off the frame.
+            $self->{_framebuf} =~ s/^.*?\000\n*//s;
+            return Net::Stomp::Frame->new({
+                command => delete $self->{_command},
+                headers => delete $self->{_headers},
+                body => $body
+            });
+        }
+    } elsif ($self->{_framebuf} =~ s/^(.*?)\000\n*//s) {
+        # No content-length header.
+
+        my $body = $1;
+        $self->{_framebuf_changed} = 1;
+        return Net::Stomp::Frame->new({
+              command => delete $self->{_command},
+              headers => delete $self->{_headers},
+              body => $body });
+    }
+
+    return 0;
+}
+
 sub receive_frame {
     my ($self, $conf) = @_;
 
-    my $frame;
-    while (!$frame) {
+    my $timeout = exists $conf->{timeout} ? $conf->{timeout} : undef;
 
-        # If the user passed in { timeout => 1 } then we wait for up to a
-        # second to read something. If we get no data in that time, then return
-        # undef.
-
-        # But if we get an error (cos we aren't connected) then we should
-        # reconnect and try again.
-        if ( $self->can_read($conf) ) {
-            eval {
-                $frame = Net::Stomp::Frame->parse( $self->socket );
-                1;
-            } or $self->_reconnect;
-        }
-        else {
-            return;
-        }
+    my $done = 0;
+    while ( not $done = $self->_read_headers ) {
+        return undef unless $self->_read_data($timeout);
     }
-    #     warn "receive [" . $frame->as_string . "]\n";
-    return $frame;
+    while ( not $done = $self->_read_body ) {
+        return undef unless $self->_read_data($timeout);
+    }
+
+    return $done;
 }
 
 sub _get_next_transaction {
@@ -396,7 +463,7 @@ C<passcode> options.
 You may also pass in 'client-id', which specifies the JMS Client ID which is
 used in combination to the activemqq.subscriptionName to denote a durable
 subscriber.
-  
+
   $stomp->connect( { login => 'hello', passcode => 'there' } );
 
 =head2 send
@@ -457,17 +524,17 @@ set it to true so that dispatching will not block fast consumers.
 non-durable topics by dropping old messages - we can set a maximum
 pending limit which once a slow consumer backs up to this high water
 mark we begin to discard old messages.
- 
+
 'activemq.noLocal': Specifies whether or not locally sent messages
 should be ignored for subscriptions. Set to true to filter out locally
 sent messages.
- 
+
 'activemq.prefetchSize': Specifies the maximum number of pending
 messages that will be dispatched to the client. Once this maximum is
 reached no more messages are dispatched until the client acknowledges
 a message. Set to 1 for very fair distribution of messages across
 consumers where processing messages can be slow.
- 
+
 'activemq.priority': Sets the priority of the consumer so that
 dispatching can be weighted in priority order.
 
@@ -493,7 +560,7 @@ This unsubscribes you to a queue or topic. You must pass in a destination:
 
 =head2 receive_frame
 
-This blocks and returns you the next Stomp frame. 
+This blocks and returns you the next Stomp frame.
 
   my $frame = $stomp->receive_frame;
   warn $frame->body; # do something here
@@ -508,8 +575,8 @@ wait for a specified time pass a C<timeout> argument:
 
 =head2 can_read
 
-This returns whether a frame is waiting to be read. Optionally takes a
-timeout in seconds:
+This returns whether there is new data is waiting to be read from the STOMP
+server. Optionally takes a timeout in seconds:
 
   my $can_read = $stomp->can_read;
   my $can_read = $stomp->can_read({ timeout => '0.1' });
@@ -538,17 +605,19 @@ may construct your own frame and send it:
 
 L<Net::Stomp::Frame>.
 
-=head1 AUTHOR
+=head1 AUTHORS
 
-Leon Brocard <acme@astray.com>.
-Thom May <thom.may@betfair.com>.
-Ash Berlin <ash_github@firemirror.com>.
+Leon Brocard <acme@astray.com>,
+Thom May <thom.may@betfair.com>,
+Ash Berlin <ash_github@firemirror.com>,
+Michael S. Fischer <michael@dynamine.net>
 
 =head1 COPYRIGHT
 
 Copyright (C) 2006-9, Leon Brocard
 Copyright (C) 2009, Thom May, Betfair.com
 Copyright (C) 2010, Ash Berlin, Net-a-Porter.com
+Copyright (C) 2010, Michael S. Fischer
 
 This module is free software; you can redistribute it or modify it
 under the same terms as Perl itself.

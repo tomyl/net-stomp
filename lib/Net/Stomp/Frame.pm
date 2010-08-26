@@ -15,7 +15,7 @@ BEGIN {
             my $self = shift;
             $self->headers->{$header} = shift if @_;
             $self->headers->{$header};
-            }
+        };
     }
 }
 
@@ -40,64 +40,6 @@ sub as_string {
     $frame .= "\n";
     $frame .= $body || '';
     $frame .= "\000";
-}
-
-# NBK - $sock->getline does buffered IO which screws up select.  Use
-# sysread one char at a time to avoid reading part of the next line.
-sub _readline {
-    my($self, $socket, $terminator, $msg) = @_;
-
-    $terminator = "\n" unless defined($terminator);
-    $msg ||= "";
-
-    my $s = "";
-    while( 1 ) {
-        $socket->sysread($s, 1, length($s)) or die("Error reading $msg: $!");
-        last if substr($s, -1) eq $terminator;
-    }
-
-    return $s;
-}
-
-sub parse {
-    my ( $package, $socket ) = @_;
-    local $/ = "\n";
-
-    # read the command
-    my $command;
-    while (1) {
-        $command = $package->_readline($socket, "\n", "command");
-        chop $command;
-        last if $command;
-    }
-
-    # read headers
-    my $headers;
-    while (1) {
-        my $line = $package->_readline($socket, "\n", "header");
-        chop $line;
-        last if $line eq "";
-        my ( $key, $value ) = split(/: ?/, $line, 2);
-        $headers->{$key} = $value;
-    }
-
-    # read the body
-    my $body;
-    my $c;
-    if ( $headers->{"content-length"} ) {
-        $socket->sysread( $body, $headers->{"content-length"} + 1 )
-            || die "Error reading body: $!";
-        $headers->{bytes_message} = 1;
-    } else {
-        $body = $package->_readline($socket, "\000", "body");
-    }
-    # strip trailing null
-    $body =~ s/\000$//;
-    
-    my $frame = Net::Stomp::Frame->new(
-        { command => $command, headers => $headers, body => $body } );
-
-    return $frame;
 }
 
 1;
