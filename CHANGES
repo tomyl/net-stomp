@@ -1,6 +1,9 @@
 Revision history for Perl module Net::Stomp:
 
-0.38_99  Fri Aug 27 00:11:08 BST 2010
+0.39 Fri Jan 14 15:59:27 GMT 2011
+  - Non-dev version number. No further changes
+
+0.38_99 Fri Aug 27 00:11:08 BST 2010
   - Reimplemented Net::Stomp::receive_frame() to properly handle STOMP frames
     that have extraneous line feed characters after the NULL terminator, before
     the next frame header (e.g., ActiveMQ).  (Implemented by Michael S. Fischer)

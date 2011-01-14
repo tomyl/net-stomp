@@ -10,4 +10,5 @@ META.yml
 README
 t/pod.t
 t/pod_coverage.t
+xt/consume_buffering.t
 Makefile.PL
