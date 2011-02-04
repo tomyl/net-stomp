@@ -260,7 +260,7 @@ sub _read_data {
                                      $self->bufsize,
                                      length($self->{_framebuf} || ''));
 
-    if ($len > 0) {
+    if ($len && $len > 0) {
         $self->{_framebuf_changed} = 1;
     }
     else {
@@ -298,7 +298,7 @@ sub _read_body {
     if ($h->{'content-length'}) {
         if (length($self->{_framebuf}) >= $h->{'content-length'}) {
             $self->{_framebuf_changed} = 1;
-            my $body = substr($self->{framebuf},
+            my $body = substr($self->{_framebuf},
                               0,
                               $h->{'content-length'},
                               undef );
