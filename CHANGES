@@ -1,7 +1,11 @@
 Revision history for Perl module Net::Stomp:
 
+0.40 Fri Feb  4 09:16:39 GMT 2011
+  - Fix silly bug in _read_body (reported by Zulf Ahmed)
+  - Remove uninitialized value in numeric gt warning (reported by Dave Krieger)
+
 0.39 Fri Jan 14 15:59:27 GMT 2011
-  - Non-dev version number. No further changes
+  - Cope with EOF during receive_frame better
 
 0.38_99 Fri Aug 27 00:11:08 BST 2010
   - Reimplemented Net::Stomp::receive_frame() to properly handle STOMP frames
