@@ -37,10 +37,15 @@ sub new {
                 unless $uris;
 
         foreach my $host (split(/,/,$uris)) {
-            my ($hostname, $port) = ($host =~ m{^\w+://([a-zA-Z0-9\-./]+):([0-9]+)$})
-              || confess "Unable to parse failover component: '$host'";
+            $host =~ m{^\w+://([a-zA-Z0-9\-./]+):([0-9]+)$} || confess "Unable to parse failover component: '$host'";
+            my ($hostname, $port) = ($1, $2);
+
             push(@hosts, {hostname => $hostname, port => $port});
         }
+    } elsif ($self->hosts) {
+        ## @hosts is used inside the while loop later to decide whether we have
+        ## cycled through all setup hosts.
+        @hosts = @{$self->hosts};
     }
     $self->hosts(@hosts);
 
@@ -627,6 +632,7 @@ Leon Brocard <acme@astray.com>,
 Thom May <thom.may@betfair.com>,
 Ash Berlin <ash_github@firemirror.com>,
 Michael S. Fischer <michael@dynamine.net>
+Vigith Maurice <vigith@yahoo-inc.com>
 
 =head1 COPYRIGHT
 
