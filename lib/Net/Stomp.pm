@@ -97,7 +97,7 @@ sub _get_connection {
         $socket = IO::Socket::INET->new(%sockopts);
         binmode($socket) if $socket;
     }
-    die "Error connecting to " . $self->hostname . ':' . $self->port . ": $!"
+    die "Error connecting to " . $self->hostname . ':' . $self->port . ": $@"
         unless $socket;
 
     $self->select->remove($self->socket) if $self->socket;
