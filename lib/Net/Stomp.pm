@@ -301,7 +301,7 @@ sub _read_body {
             my $body = substr($self->{_framebuf},
                               0,
                               $h->{'content-length'},
-                              undef );
+                              '' );
 
             # Trim the trailer off the frame.
             $self->{_framebuf} =~ s/^.*?\000\n*//s;
