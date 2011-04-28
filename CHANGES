@@ -1,6 +1,12 @@
 Revision history for Perl module Net::Stomp:
 
-0.40 Fri Feb  4 09:16:39 GMT 2011
+0.40 Thu Apr 28 14:56:49 GMT 2011
+  - Various small warning/error message fies:
+      - Remove undef warning from substr (Squeeks)
+      - rt#67160: IO::Socket::INET/SSL Error Variables (Stephen Fralich)
+      - rt#65979: Fix bug in failover hosts (vigith maurice)
+
+0.41 Fri Feb  4 09:16:39 GMT 2011
   - Fix silly bug in _read_body (reported by Zulf Ahmed)
   - Remove uninitialized value in numeric gt warning (reported by Dave Krieger)
 
