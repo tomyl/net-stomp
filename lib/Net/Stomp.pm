@@ -247,11 +247,23 @@ sub ack {
 
 sub send_frame {
     my ( $self, $frame ) = @_;
-
-    #     warn "send [" . $frame->as_string . "]\n";
-    $self->socket->syswrite( $frame->as_string );
-    my $connected = $self->socket->connected;
-    unless (defined $connected) {
+    # see if we're connected before we try to syswrite()
+    if (not defined $self->_connected) {
+        $self->_reconnect;
+        if (not defined $self->_connected) {
+            warn q{wasn't connected; couldn't _reconnect()};
+        }
+    }
+    my $written = $self->socket->syswrite( $frame->as_string );
+    if (($written||0) != length($frame->as_string)) {
+        warn 'only wrote '
+            . ($written||0)
+            . ' characters out of the '
+            . length($frame->as_string)
+            . ' character frame';
+        warn 'problem frame: <<' . $frame->as_string . '>>';
+    }
+    unless (defined $self->_connected) {
         $self->_reconnect;
         $self->send_frame($frame);
     }
@@ -330,13 +342,29 @@ sub _read_body {
     return 0;
 }
 
+# this method is to stop the pointless warnings being thrown when trying to
+# call peername() on a closed socket, i.e.
+#   getpeername() on closed socket GEN125 at
+#   /opt/xt/xt-perl/lib/5.12.3/x86_64-linux/IO/Socket.pm line 258.
+#
+# solution taken from:
+# http://objectmix.com/perl/80545-warning-getpeername.html
+sub _connected {
+    my $self = shift;
+    my $connected;
+    {
+        local $^W = 0;
+        $connected = $self->socket->connected;
+    }
+    return $connected;
+}
+
 sub receive_frame {
     my ($self, $conf) = @_;
 
     my $timeout = exists $conf->{timeout} ? $conf->{timeout} : undef;
 
-    my $connected = $self->socket->connected;
-    unless (defined $connected) {
+    unless (defined $self->_connected) {
         $self->_reconnect;
     }
 
@@ -357,7 +385,7 @@ sub _get_next_transaction {
     $serial++;
     $self->serial($serial);
 
-    return $self->session_id . '-' . $serial;
+    return ($self->session_id||'nosession') . '-' . $serial;
 }
 
 1;
@@ -631,8 +659,9 @@ L<Net::Stomp::Frame>.
 Leon Brocard <acme@astray.com>,
 Thom May <thom.may@betfair.com>,
 Ash Berlin <ash_github@firemirror.com>,
-Michael S. Fischer <michael@dynamine.net>
-Vigith Maurice <vigith@yahoo-inc.com>
+Michael S. Fischer <michael@dynamine.net>,
+Vigith Maurice <vigith@yahoo-inc.com>,
+Chisel Wright <chisel@chizography.net>
 
 =head1 COPYRIGHT
 
