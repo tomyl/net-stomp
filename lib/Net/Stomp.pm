@@ -658,10 +658,17 @@ L<Net::Stomp::Frame>.
 
 Leon Brocard <acme@astray.com>,
 Thom May <thom.may@betfair.com>,
-Ash Berlin <ash_github@firemirror.com>,
 Michael S. Fischer <michael@dynamine.net>,
+Ash Berlin <ash_github@firemirror.com>
+
+=head1 CONTRIBUTORS
+
+Paul Driver <frodwith@cpan.org>,
+Andreas Faafeng <aff@cpan.org>,
 Vigith Maurice <vigith@yahoo-inc.com>,
-Chisel Wright <chisel@chizography.net>
+Stephen Fralich <sjf4@uw.edu>,
+Squeeks <squeek@cpan.org>,
+Chisel Wright <chisel@chizography.net>,
 
 =head1 COPYRIGHT
 
