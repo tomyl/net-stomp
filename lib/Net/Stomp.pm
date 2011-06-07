@@ -357,7 +357,7 @@ sub _get_next_transaction {
     $serial++;
     $self->serial($serial);
 
-    return $self->session_id . '-' . $serial;
+    return ($self->session_id||'nosession') . '-' . $serial;
 }
 
 1;
