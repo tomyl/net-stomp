@@ -219,13 +219,20 @@ sub send_transactional {
     }
 }
 
+sub _sub_key {
+    my ($conf) = @_;
+
+    if ($conf->{id}) { return "id-".$conf->{id} }
+    return "dest-".$conf->{destination}
+}
+
 sub subscribe {
     my ( $self, $conf ) = @_;
     my $frame = Net::Stomp::Frame->new(
         { command => 'SUBSCRIBE', headers => $conf } );
     $self->send_frame($frame);
     my $subs = $self->subscriptions;
-    $subs->{$conf->{'destination'}} = $conf;
+    $subs->{_sub_key($conf)} = $conf;
 }
 
 sub unsubscribe {
@@ -234,7 +241,7 @@ sub unsubscribe {
         { command => 'UNSUBSCRIBE', headers => $conf } );
     $self->send_frame($frame);
     my $subs = $self->subscriptions;
-    delete $subs->{$conf->{'destination'}};
+    delete $subs->{_sub_key($conf)}
 }
 
 sub ack {
