@@ -35,7 +35,7 @@ sub as_string {
     }
 
     while ( my ( $key, $value ) = each %{ $headers || {} } ) {
-        $frame .= $key . ':' . $value . "\n";
+        $frame .= $key . ':' . (defined $value ? $value : '') . "\n";
     }
     $frame .= "\n";
     $frame .= $body || '';
