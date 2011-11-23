@@ -1,4 +1,10 @@
 Revision history for Perl module Net::Stomp:
+0.44 Wed Nov 23 23:26:39 GMT 2011
+  - Updated CHANGES to include recent changes (Jason Tang)
+
+0.43 Mon Nov 21 10:46:58 GMT 2011
+  - rt#68583: "Use of uninitialized value" warning in as_string()(Chisel Wright)
+  - rt#70670: Key using id rather than destination (Gianni Ceccarelli)
 
 0.42 Sat Aug 20 07:37:31 GMT 2011
   - Improve handling of disconnecting/reconnecting (Chisel Wright)
