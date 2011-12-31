@@ -6,7 +6,7 @@ use IO::Select;
 use Net::Stomp::Frame;
 use Carp;
 use base 'Class::Accessor::Fast';
-our $VERSION = '0.42';
+our $VERSION = '0.44';
 
 __PACKAGE__->mk_accessors( qw(
     _cur_host failover hostname hosts port select serial session_id socket ssl
@@ -219,13 +219,20 @@ sub send_transactional {
     }
 }
 
+sub _sub_key {
+    my ($conf) = @_;
+
+    if ($conf->{id}) { return "id-".$conf->{id} }
+    return "dest-".$conf->{destination}
+}
+
 sub subscribe {
     my ( $self, $conf ) = @_;
     my $frame = Net::Stomp::Frame->new(
         { command => 'SUBSCRIBE', headers => $conf } );
     $self->send_frame($frame);
     my $subs = $self->subscriptions;
-    $subs->{$conf->{'destination'}} = $conf;
+    $subs->{_sub_key($conf)} = $conf;
 }
 
 sub unsubscribe {
@@ -234,7 +241,7 @@ sub unsubscribe {
         { command => 'UNSUBSCRIBE', headers => $conf } );
     $self->send_frame($frame);
     my $subs = $self->subscriptions;
-    delete $subs->{$conf->{'destination'}};
+    delete $subs->{_sub_key($conf)}
 }
 
 sub ack {
