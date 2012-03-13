@@ -11,6 +11,7 @@ our $VERSION = '0.44';
 __PACKAGE__->mk_accessors( qw(
     _cur_host failover hostname hosts port select serial session_id socket ssl
     ssl_options subscriptions _connect_headers bufsize
+    reconnect_on_fork
 ) );
 
 sub new {
@@ -18,6 +19,7 @@ sub new {
     my $self  = $class->SUPER::new(@_);
 
     $self->bufsize(8192) unless $self->bufsize;
+    $self->reconnect_on_fork(1) unless defined $self->reconnect_on_fork;
 
     $self->{_framebuf} = "";
 
@@ -104,7 +106,7 @@ sub _get_connection {
 
     $self->select->add($socket);
     $self->socket($socket);
-
+    $self->{_pid} = $$;
 }
 
 sub connect {
@@ -358,6 +360,9 @@ sub _read_body {
 # http://objectmix.com/perl/80545-warning-getpeername.html
 sub _connected {
     my $self = shift;
+
+    return if $self->{_pid} != $$ and $self->reconnect_on_fork;
+
     my $connected;
     {
         local $^W = 0;
@@ -510,6 +515,14 @@ in an array-of-hashrefs in the C<hosts> parameter.
 
 Currently when ever Net::Stomp connects or reconnects it will simply try the
 next host in the list.
+
+=head3 Reconnect on C<fork>
+
+By default Net::Stomp will reconnect, using a different socket, if the
+process C<fork>s. This avoids problems when parent & child write to
+the socket at the same time. If, for whatever reason, you don't want
+this to happen, set C<reconnect_on_fork> to C<0> (either as a
+constructor parameter, or by calling the method).
 
 =head2 connect
 
