@@ -1,4 +1,7 @@
 Revision history for Perl module Net::Stomp:
+0.45 Wed Mar 14 10:25:35 GMT 2012
+  - reconnect on fork() (Gianni Ceccarelli)
+
 0.44 Wed Nov 23 23:26:39 GMT 2011
   - Updated CHANGES to include recent changes (Jason Tang)
 
