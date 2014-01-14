@@ -1,4 +1,7 @@
 Revision history for Perl module Net::Stomp:
+0.46 Tue Jan 14 12:21:43 GMT 2014
+  - Recommend modules required for IPv6 support (Dagfinn Ilmari Mannsåker)
+
 0.45 Wed Mar 14 10:25:35 GMT 2012
   - reconnect on fork() (Gianni Ceccarelli)
 
