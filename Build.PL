@@ -12,5 +12,9 @@ my $build = Module::Build->new(
         'IO::Select'            => '0',
         'Class::Accessor::Fast' => '0',
     },
+    recommends         => {
+        'IO::Socket::IP'        => '0.20',
+        'IO::Socket::SSL'       => '1.75',
+    },
 );
 $build->create_build_script;

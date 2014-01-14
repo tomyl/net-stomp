@@ -1,7 +1,6 @@
 package Net::Stomp;
 use strict;
 use warnings;
-use IO::Socket::INET;
 use IO::Select;
 use Net::Stomp::Frame;
 use Carp;
@@ -70,6 +69,7 @@ sub new {
     return $self;
 }
 
+my $socket_class;
 sub _get_connection {
     my $self = shift;
     if (my $hosts = $self->hosts) {
@@ -96,7 +96,9 @@ sub _get_connection {
         %sockopts = ( %sockopts, %{ $self->ssl_options || {} } );
         $socket = IO::Socket::SSL->new(%sockopts);
     } else {
-        $socket = IO::Socket::INET->new(%sockopts);
+        $socket_class ||= eval { require IO::Socket::IP; IO::Socket::IP->VERSION('0.20'); "IO::Socket::IP" }
+            || do { require IO::Socket::INET; "IO::Socket::INET" };
+        $socket = $socket_class->new(%sockopts);
         binmode($socket) if $socket;
     }
     die "Error connecting to " . $self->hostname . ':' . $self->port . ": $@"
