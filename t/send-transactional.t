@@ -27,18 +27,17 @@ $fh->{written} = sub {
 # <- something else
 # -> COMMIT
 
-subtest 'successful' => sub {
+sub _testit {
+    my ($response_frame,$expected) = @_;
     $fh->{to_read} = sub {
         if ($frames[1]) {
-            return Net::Stomp::Frame->new({
-                command=>'RECEIPT',
-                headers=>{'receipt-id'=>$frames[1]->headers->{receipt}},
-                body=>undef,
-            })->as_string;
+            return $response_frame->($frames[1]->headers->{receipt})
+                ->as_string;
         }
         return '';
     };
 
+    @frames=();
     $s->send_transactional({some=>'header',body=>'string'});
 
     is(scalar(@frames),3,'3 frames sent');
@@ -70,66 +69,37 @@ subtest 'successful' => sub {
     cmp_deeply(
         $frames[2],
         methods(
-            command => 'COMMIT',
+            command => uc($expected),
             headers => {
                 transaction=>$transaction,
             },
         ),
-        'commit ok',
+        "\L$expected\E ok",
     ) or note p $frames[2];
+}
+
+subtest 'successful' => sub {
+    _testit(sub{ Net::Stomp::Frame->new({
+        command=>'RECEIPT',
+        headers=>{'receipt-id'=>$_[0]},
+        body=>undef,
+    }) },'COMMIT');
 };
 
-@frames=();
 subtest 'failed' => sub {
-    $fh->{to_read} = sub {
-        if ($frames[1]) {
-            return Net::Stomp::Frame->new({
-                command=>'ERROR',
-                headers=>{some=>'header'},
-                body=>undef,
-            })->as_string;
-        }
-        return '';
-    };
+    _testit(sub{ Net::Stomp::Frame->new({
+        command=>'ERROR',
+        headers=>{some=>'header'},
+        body=>undef,
+    }) },'ABORT');
+};
 
-    $s->send_transactional({some=>'header',body=>'string'});
-
-    is(scalar(@frames),3,'3 frames sent');
-
-    cmp_deeply(
-        $frames[0],
-        methods(
-            command=>'BEGIN',
-            headers => {transaction => ignore()},
-        ),
-        'begin ok',
-    ) or note p $frames[0];
-    my $transaction = $frames[0]->headers->{transaction};
-
-    cmp_deeply(
-        $frames[1],
-        methods(
-            command => 'SEND',
-            headers => {
-                some=>'header',
-                transaction=>$transaction,
-                receipt=>ignore(),
-            },
-            body => 'string',
-        ),
-        'send ok',
-    ) or note p $frames[1];
-
-    cmp_deeply(
-        $frames[2],
-        methods(
-            command => 'ABORT',
-            headers => {
-                transaction=>$transaction,
-            },
-        ),
-        'abort ok',
-    ) or note p $frames[2];
+subtest 'bad receipt' => sub {
+    _testit(sub{ Net::Stomp::Frame->new({
+        command=>'RECEIPT',
+        headers=>{'receipt-id'=>"not-$_[0]"},
+        body=>undef,
+    }) },'ABORT');
 };
 
 done_testing;
