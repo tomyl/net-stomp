@@ -1,23 +1,9 @@
 #!perl
-use strict;
-use warnings;
-use Test::More;
-use Test::Deep;
-use Net::Stomp;
-use Net::Stomp::StupidLogger;
+use lib 't/lib';
+use TestHelp;
 
 {no warnings 'redefine';
  sub Net::Stomp::_get_connection {}
-}
-
-sub mkstomp {
-    return Net::Stomp->new({
-        logger => Net::Stomp::StupidLogger->new({
-            warn => 0, error => 0, fatal => 0,
-        }),
-        hosts => [ {hostname=>'localhost',port=>61613} ],
-        @_,
-    })
 }
 
 subtest 'reconnect on fork' => sub {
