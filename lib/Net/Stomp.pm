@@ -218,6 +218,7 @@ sub send_transactional {
     # send the message
     my $receipt_id = $self->_get_next_transaction;
     $conf->{receipt} = $receipt_id;
+    $conf->{transaction} = $transaction_id;
     my $message_frame = Net::Stomp::Frame->new(
         { command => 'SEND', headers => $conf, body => $body } );
     $self->send_frame($message_frame);
