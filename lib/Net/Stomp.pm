@@ -3,15 +3,28 @@ use strict;
 use warnings;
 use IO::Select;
 use Net::Stomp::Frame;
-use Carp;
+use Carp qw(longmess);
 use base 'Class::Accessor::Fast';
+use Net::Stomp::StupidLogger;
 our $VERSION = '0.46';
 
 __PACKAGE__->mk_accessors( qw(
     _cur_host failover hostname hosts port select serial session_id socket ssl
     ssl_options subscriptions _connect_headers bufsize
-    reconnect_on_fork
+    reconnect_on_fork logger
 ) );
+
+sub _logconfess {
+    my ($self,@etc) = @_;
+    my $m = longmess(@etc);
+    $self->logger->fatal($m);
+    die $m;
+}
+sub _logdie {
+    my ($self,@etc) = @_;
+    $self->logger->fatal(@etc);
+    die "@etc";
+}
 
 sub new {
     my $class = shift;
@@ -19,6 +32,9 @@ sub new {
 
     $self->bufsize(8192) unless $self->bufsize;
     $self->reconnect_on_fork(1) unless defined $self->reconnect_on_fork;
+
+    $self->logger(Net::Stomp::StupidLogger->new())
+        unless $self->logger;
 
     $self->{_framebuf} = "";
 
@@ -34,11 +50,11 @@ sub new {
     if ($self->failover) {
         my ($uris, $opts) = $self->failover =~ m{^failover:(?://)? \(? (.*?) \)? (?: \? (.*?) ) ?$}ix;
 
-        confess "Unable to parse failover uri: " . $self->failover
-                unless $uris;
+        $self->_logconfess("Unable to parse failover uri: " . $self->failover)
+            unless $uris;
 
         foreach my $host (split(/,/,$uris)) {
-            $host =~ m{^\w+://([a-zA-Z0-9\-./]+):([0-9]+)$} || confess "Unable to parse failover component: '$host'";
+            $host =~ m{^\w+://([a-zA-Z0-9\-./]+):([0-9]+)$} || $self->_logconfess("Unable to parse failover component: '$host'");
             my ($hostname, $port) = ($1, $2);
 
             push(@hosts, {hostname => $hostname, port => $port});
@@ -65,7 +81,7 @@ sub new {
             sleep(5);
         }
     }
-    die $err if $err;
+    $self->_logdie($err) if $err;
     return $self;
 }
 
@@ -90,9 +106,9 @@ sub _get_connection {
     );
     if ( $self->ssl ) {
         eval { require IO::Socket::SSL };
-        die
+        $self->_logdie(
             "You should install the IO::Socket::SSL module for SSL support in Net::Stomp"
-            if $@;
+        ) if $@;
         %sockopts = ( %sockopts, %{ $self->ssl_options || {} } );
         $socket = IO::Socket::SSL->new(%sockopts);
     } else {
@@ -101,7 +117,7 @@ sub _get_connection {
         $socket = $socket_class->new(%sockopts);
         binmode($socket) if $socket;
     }
-    die "Error connecting to " . $self->hostname . ':' . $self->port . ": $@"
+    $self->_logdie("Error connecting to " . $self->hostname . ':' . $self->port . ": $@")
         unless $socket;
 
     $self->select->remove($self->socket) if $self->socket;
@@ -262,17 +278,16 @@ sub send_frame {
     if (not defined $self->_connected) {
         $self->_reconnect;
         if (not defined $self->_connected) {
-            warn q{wasn't connected; couldn't _reconnect()};
+            $self->logger->warn(q{wasn't connected; couldn't _reconnect()});
         }
     }
     my $written = $self->socket->syswrite( $frame->as_string );
     if (($written||0) != length($frame->as_string)) {
-        warn 'only wrote '
+        $self->logger->warn('only wrote '
             . ($written||0)
             . ' characters out of the '
             . length($frame->as_string)
-            . ' character frame';
-        warn 'problem frame: <<' . $frame->as_string . '>>';
+            . ' character frame <<' . $frame->as_string . '>>');
     }
     unless (defined $self->_connected) {
         $self->_reconnect;
@@ -506,6 +521,16 @@ If you want to pass in L<IO::Socket::SSL> options:
     ssl         => 1,
     ssl_options => { SSL_cipher_list => 'ALL:!EXPORT' },
   } );
+
+You can pass a logger object, for example a L<Log::Log4perl> logger:
+
+  my $stomp = Net::Stomp->new({
+    hostname => 'localhost',
+    port     => '61613',
+    logger   => Log::Log4perl->get_logger('stomp'),
+  });
+
+Warnings and errors will be logged instead of written to C<STDERR>.
 
 =head3 Failover
 
