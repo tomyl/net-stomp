@@ -11,7 +11,7 @@ our $VERSION = '0.46';
 __PACKAGE__->mk_accessors( qw(
     _cur_host failover hostname hosts port select serial session_id socket ssl
     ssl_options subscriptions _connect_headers bufsize
-    reconnect_on_fork logger
+    reconnect_on_fork logger connect_delay
 ) );
 
 sub _logconfess {
@@ -31,6 +31,7 @@ sub new {
     my $self  = $class->SUPER::new(@_);
 
     $self->bufsize(8192) unless $self->bufsize;
+    $self->connect_delay(5) unless defined $self->connect_delay;
     $self->reconnect_on_fork(1) unless defined $self->reconnect_on_fork;
 
     $self->logger(Net::Stomp::StupidLogger->new())
@@ -78,7 +79,7 @@ sub new {
                 $err = $@;
                 last;
             }
-            sleep(5);
+            sleep($self->connect_delay);
         }
     }
     $self->_logdie($err) if $err;
@@ -97,7 +98,21 @@ sub _get_connection {
         $self->hostname($hosts->[$self->_cur_host]->{hostname});
         $self->port($hosts->[$self->_cur_host]->{port});
     }
-    my ($socket);
+    my $socket = $self->_get_socket;
+    $self->_logdie("Error connecting to " . $self->hostname . ':' . $self->port . ": $@")
+        unless $socket;
+
+    $self->select->remove($self->socket) if $self->socket;
+
+    $self->select->add($socket);
+    $self->socket($socket);
+    $self->{_pid} = $$;
+}
+
+sub _get_socket {
+    my ($self) = @_;
+    my $socket;
+
     my %sockopts = (
         PeerAddr => $self->hostname,
         PeerPort => $self->port,
@@ -117,14 +132,8 @@ sub _get_connection {
         $socket = $socket_class->new(%sockopts);
         binmode($socket) if $socket;
     }
-    $self->_logdie("Error connecting to " . $self->hostname . ':' . $self->port . ": $@")
-        unless $socket;
 
-    $self->select->remove($self->socket) if $self->socket;
-
-    $self->select->add($socket);
-    $self->socket($socket);
-    $self->{_pid} = $$;
+    return $socket;
 }
 
 sub connect {
@@ -158,7 +167,7 @@ sub _reconnect {
     }
     eval { $self->_get_connection };
     while ($@) {
-        sleep(5);
+        sleep($self->connect_delay);
         eval { $self->_get_connection };
     }
     $self->connect( $self->_connect_headers );
