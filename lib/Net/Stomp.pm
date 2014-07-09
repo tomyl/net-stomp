@@ -64,7 +64,7 @@ sub new {
         ## cycled through all setup hosts.
         @hosts = @{$self->hosts};
     }
-    $self->hosts(@hosts);
+    $self->hosts(\@hosts);
 
     my $err;
     {
