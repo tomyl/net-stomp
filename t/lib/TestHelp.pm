@@ -1,14 +1,12 @@
-package TestHelp;
+{package TestHelp;
 use strict;
 use warnings;
+BEGIN { $INC{'IO/Select.pm'}=__FILE__ }
 use Net::Stomp;
-use Net::Stomp::StupidLogger;
 
 sub mkstomp {
     return Net::Stomp->new({
-        logger => Net::Stomp::StupidLogger->new({
-            warn => 0, error => 0, fatal => 0,
-        }),
+        logger => TestHelp::Logger->new(),
         hosts => [ {hostname=>'localhost',port=>61613} ],
         connect_delay => 0,
         @_,
@@ -16,8 +14,10 @@ sub mkstomp {
 }
 
 sub mkstomp_testsocket {
-    my $buffer='';
-    open my $fh,'<',\$buffer;
+    my $fh = TestHelp::Socket->new({
+        connected=>1,
+        buffer=>'',
+    });
     no warnings 'redefine';
     local *Net::Stomp::_get_socket = sub { return $fh };
     my $s = mkstomp(@_);
@@ -31,6 +31,52 @@ sub import {
     *{"${caller}::mkstomp"}=\&mkstomp;
     *{"${caller}::mkstomp_testsocket"}=\&mkstomp_testsocket;
     return;
+}
+}
+
+{package TestHelp::Socket;
+use strict;
+use warnings;
+
+sub new {
+    bless $_[1],$_[0];
+}
+sub connected { return $_[0]->{connected} }
+sub close { }
+sub syswrite { }
+
+sub sysread {
+    my ($self,$dest,$length,$offset) = @_;
+
+    my $string = ref($self->{buffer})?($self->{buffer}->()):($self->{buffer});
+
+    my $ret = substr($string,0,$length,'');
+    substr($_[1],$offset) = $ret;
+    return length $ret;
+}
+}
+
+{package IO::Select;
+use strict;
+use warnings;
+
+sub new { bless {},$_[0] }
+
+sub add { $_[0]->{socket}=$_[1] }
+sub remove { delete $_[0]->{socket} }
+
+sub can_read { return $_[0]->{socket} && $_[0]->{socket}{buffer} ne '' }
+}
+
+{package TestHelp::Logger;
+use strict;
+use warnings;
+use base 'Net::Stomp::StupidLogger';
+
+sub _log {
+    my ($self,$level,@etc) = @_;
+    Test::More::note("log $level: @etc");
+}
 }
 
 1;
