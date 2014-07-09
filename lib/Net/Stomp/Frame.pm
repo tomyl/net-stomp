@@ -39,16 +39,16 @@ sub as_string {
     }
     $frame .= "\n";
     $frame .= $body || '';
-    $frame .= "\000";
+    $frame .= "\0";
 }
 
-sub from_string {
+sub parse {
     my ($class,$string) = @_;
 
     $string =~ s{
       \A\s*
       ([A-Z]+)\n #command
-      (.*?)\n # header block
+      ((?:[^\n]+\n)*)\n # header block
     }{}smx;
     my ($command,$headers_block) = ($1,$2);
 
@@ -64,15 +64,15 @@ sub from_string {
 
     if ($headers && $headers->{'content-length'}) {
         if (length($string) >= $headers->{'content-length'}) {
-            my $body = substr($string,
-                              0,
-                              $headers->{'content-length'},
-                              '' );
+            $body = substr($string,
+                           0,
+                           $headers->{'content-length'},
+                           '' );
         }
         else { return } # not enough body
-    } elsif ($string =~ s/^(.*?)\000\n*//s) {
+    } elsif ($string =~ s/\A(.*?)\0//s) {
         # No content-length header.
-        my $body = $1;
+        $body = $1 if length($1);
     }
     else { return } # no body
 

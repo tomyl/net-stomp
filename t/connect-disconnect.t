@@ -7,7 +7,7 @@ my ($s,$fh)=mkstomp_testsocket();
 my $frame;my $buffer='';
 $fh->{written} = sub {
     $buffer .= $_[0];
-    $frame = Net::Stomp::Frame->from_string($buffer);
+    $frame = Net::Stomp::Frame->parse($buffer);
     $buffer='' if $frame;
 };
 
