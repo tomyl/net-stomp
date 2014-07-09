@@ -42,6 +42,47 @@ sub as_string {
     $frame .= "\000";
 }
 
+sub from_string {
+    my ($class,$string) = @_;
+
+    $string =~ s{
+      \A\s*
+      ([A-Z]+)\n #command
+      (.*?)\n # header block
+    }{}smx;
+    my ($command,$headers_block) = ($1,$2);
+
+    return unless $command;
+
+    my ($headers,$body);
+    if ($headers_block) {
+        foreach my $line (split(/\n/, $headers_block)) {
+            my ($key, $value) = split(/\s*:\s*/, $line, 2);
+            $headers->{$key} = $value;
+        }
+    }
+
+    if ($headers && $headers->{'content-length'}) {
+        if (length($string) >= $headers->{'content-length'}) {
+            my $body = substr($string,
+                              0,
+                              $headers->{'content-length'},
+                              '' );
+        }
+        else { return } # not enough body
+    } elsif ($string =~ s/^(.*?)\000\n*//s) {
+        # No content-length header.
+        my $body = $1;
+    }
+    else { return } # no body
+
+    return $class->new({
+        command => $command,
+        headers => $headers,
+        body => $body,
+    });
+}
+
 1;
 
 __END__

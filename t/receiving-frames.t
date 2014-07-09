@@ -11,7 +11,7 @@ subtest 'one frame' => sub {
         body=>'string',
     });
 
-    $fh->{buffer}=$frame->as_string;
+    $fh->{to_read}=$frame->as_string;
     my $received = $s->receive_frame;
     cmp_deeply($received,$frame,'received and parsed');
 };
@@ -23,7 +23,7 @@ subtest 'two frames' => sub {
         body=>'string',
     })} (1,2);
 
-    $fh->{buffer}=join '',map {$_->as_string} @frames;
+    $fh->{to_read}=join '',map {$_->as_string} @frames;
     my $received = $s->receive_frame;
     cmp_deeply($received,$frames[0],'received and parsed');
     $received = $s->receive_frame;
@@ -38,7 +38,7 @@ subtest 'a few bytes at a time' => sub {
     });
     my $frame_string = $frame->as_string;
 
-    $fh->{buffer} = sub {
+    $fh->{to_read} = sub {
         return substr($frame_string,0,2,'');
     };
     my $received = $s->receive_frame;

@@ -17,6 +17,7 @@ subtest 'simplest case' => sub {
             port => 61613,
             _cur_host => 0,
             socket => \*STDIN,
+            select => noclass(superhashof({socket=>\*STDIN})),
         ),
         'correct',
     );

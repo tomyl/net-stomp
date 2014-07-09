@@ -16,7 +16,7 @@ sub mkstomp {
 sub mkstomp_testsocket {
     my $fh = TestHelp::Socket->new({
         connected=>1,
-        buffer=>'',
+        to_read=>'',
     });
     no warnings 'redefine';
     local *Net::Stomp::_get_socket = sub { return $fh };
@@ -43,12 +43,21 @@ sub new {
 }
 sub connected { return $_[0]->{connected} }
 sub close { }
-sub syswrite { }
+sub syswrite {
+    my ($self,$string) = @_;
+    if (ref($self->{written})) {
+        $self->{written}->($string);
+    }
+    else {
+        $self->{written} .= $string;
+    }
+    return length($string);
+}
 
 sub sysread {
     my ($self,$dest,$length,$offset) = @_;
 
-    my $string = ref($self->{buffer})?($self->{buffer}->()):($self->{buffer});
+    my $string = ref($self->{to_read})?($self->{to_read}->()):($self->{to_read});
 
     my $ret = substr($string,0,$length,'');
     substr($_[1],$offset) = $ret;
@@ -60,12 +69,12 @@ sub sysread {
 use strict;
 use warnings;
 
-sub new { bless {},$_[0] }
+sub new { bless {can_read=>1},$_[0] }
 
 sub add { $_[0]->{socket}=$_[1] }
 sub remove { delete $_[0]->{socket} }
 
-sub can_read { return $_[0]->{socket} && $_[0]->{socket}{buffer} ne '' }
+sub can_read { return $_[0]->{socket} && $_[0]->{can_read} }
 }
 
 {package TestHelp::Logger;
