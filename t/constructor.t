@@ -1,6 +1,7 @@
 #!perl
 use lib 't/lib';
 use TestHelp;
+use Test::Fatal;
 
 {no warnings 'redefine';
  sub Net::Stomp::_get_connection {}
@@ -45,6 +46,20 @@ subtest 'failover' => sub {
         );
         cmp_deeply($s->hosts,$cases{$case},"$case parsed ok");
     }
+};
+
+subtest 'bad failover' => sub {
+    like(
+        exception { mkstomp(failover=>'bad') },
+        qr{Unable to parse failover uri}i,
+        'bad uri correct exception',
+    );
+    like(
+        exception { mkstomp(failover=>'failover://(a,b)') },
+        qr{Unable to parse failover component}i,
+        'bad component correct exception',
+    );
+
 };
 
 done_testing;

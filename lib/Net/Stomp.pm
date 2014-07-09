@@ -65,7 +65,7 @@ sub new {
         ## cycled through all setup hosts.
         @hosts = @{$self->hosts};
     }
-    $self->hosts(\@hosts);
+    $self->hosts(\@hosts) if @hosts;
 
     my $err;
     {
@@ -102,7 +102,7 @@ sub _get_connection {
     $self->_logdie("Error connecting to " . $self->hostname . ':' . $self->port . ": $@")
         unless $socket;
 
-    $self->select->remove($self->socket) if $self->socket;
+    $self->select->remove($self->socket);
 
     $self->select->add($socket);
     $self->socket($socket);

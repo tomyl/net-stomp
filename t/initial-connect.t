@@ -1,6 +1,7 @@
 #!perl
 use lib 't/lib';
 use TestHelp;
+use Test::Fatal;
 
 our @sockets;
 {no warnings 'redefine';
@@ -16,6 +17,22 @@ subtest 'simplest case' => sub {
             hostname => 'localhost',
             port => 61613,
             _cur_host => 0,
+            socket => \*STDIN,
+            select => noclass(superhashof({socket=>\*STDIN})),
+        ),
+        'correct',
+    );
+};
+
+subtest 'simplest case, old style' => sub {
+    local @sockets=(\*STDIN);
+    my $s = mkstomp(hosts=>undef,hostname=>'localhost',port=>61613,);
+    cmp_deeply(
+        $s,
+        methods(
+            hostname => 'localhost',
+            port => 61613,
+            _cur_host => undef,
             socket => \*STDIN,
             select => noclass(superhashof({socket=>\*STDIN})),
         ),
@@ -55,8 +72,16 @@ subtest 'two host, second one' => sub {
 
 subtest 'two host, none' => sub {
     local @sockets=(undef,undef);
-    my $s = eval { mkstomp(hosts=>[{hostname=>'one',port=>1234},{hostname=>'two',port=>3456}]) };
-    my $err = $@;
+    my $s;
+    my $err = exception { $s=mkstomp(hosts=>[{hostname=>'one',port=>1234},{hostname=>'two',port=>3456}]) };
+    cmp_deeply($s,undef,'expected failure');
+    cmp_deeply($err,re(qr{Error connecting}),'expected exception');
+};
+
+subtest 'old style, failure' => sub {
+    local @sockets=(undef);
+    my $s;
+    my $err = exception { $s=mkstomp(hosts=>undef,hostname=>'localhost',port=>61613,) };
     cmp_deeply($s,undef,'expected failure');
     cmp_deeply($err,re(qr{Error connecting}),'expected exception');
 };
