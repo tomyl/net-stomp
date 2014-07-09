@@ -15,11 +15,21 @@ sub mkstomp {
     })
 }
 
+sub mkstomp_testsocket {
+    my $buffer='';
+    open my $fh,'<',\$buffer;
+    no warnings 'redefine';
+    local *Net::Stomp::_get_socket = sub { return $fh };
+    my $s = mkstomp(@_);
+    return ($s,$fh);
+}
+
 sub import {
     my $caller = caller;
-    eval "package $caller; use strict; use warnings; use Test::More; use Test::Deep;";
+    eval "package $caller; strict->import; warnings->import; use Test::More; use Test::Deep;";
     no strict 'refs';
     *{"${caller}::mkstomp"}=\&mkstomp;
+    *{"${caller}::mkstomp_testsocket"}=\&mkstomp_testsocket;
     return;
 }
 
