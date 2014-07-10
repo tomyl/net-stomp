@@ -46,4 +46,40 @@ subtest 'a few bytes at a time' => sub {
 
 };
 
+subtest 'one frame, with content-length' => sub {
+    my $str = "string\0with\0zeroes\0";
+    my $frame = Net::Stomp::Frame->new({
+        command=>'MESSAGE',
+        body=>$str,
+        headers=>{
+            'message-id'=>1,
+            'content-length'=>length($str),
+        },
+    });
+
+    $fh->{to_read}=$frame->as_string;
+    my $received = $s->receive_frame;
+    cmp_deeply($received,$frame,'received and parsed');
+};
+
+subtest 'a few bytes at a time, with content-length' => sub {
+    my $str = "string\0with\0zeroes\0";
+    my $frame = Net::Stomp::Frame->new({
+        command=>'MESSAGE',
+        body=>$str,
+        headers=>{
+            'message-id'=>1,
+            'content-length'=>length($str),
+        },
+    });
+    my $frame_string = $frame->as_string;
+
+    $fh->{to_read} = sub {
+        return substr($frame_string,0,2,'');
+    };
+    my $received = $s->receive_frame;
+    cmp_deeply($received,$frame,'received and parsed');
+
+};
+
 done_testing;
