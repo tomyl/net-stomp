@@ -42,16 +42,17 @@ sub new {
     bless $_[1],$_[0];
 }
 sub connected { return $_[0]->{connected} }
-sub close { }
+sub close { $_[0]->{connected} = undef; }
 sub syswrite {
     my ($self,$string) = @_;
+    my $ret;
     if (ref($self->{written})) {
-        $self->{written}->($string);
+        return $self->{written}->($string);
     }
     else {
         $self->{written} .= $string;
+        return length($string);
     }
-    return length($string);
 }
 
 sub sysread {

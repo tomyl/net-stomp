@@ -13,6 +13,7 @@ $fh->{written} = sub {
         $buffer='';
         push @frames,$frame;
     }
+    return length($_[0]);
 };
 
 # expected:
