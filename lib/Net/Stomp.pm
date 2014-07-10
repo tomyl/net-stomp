@@ -318,12 +318,17 @@ sub _read_data {
                                      $self->bufsize,
                                      length($self->{_framebuf} || ''));
 
-    if ($len && $len > 0) {
+    if (defined $len && $len>0) {
         $self->{_framebuf_changed} = 1;
     }
     else {
-        # EOF detected - connection is gone. We have to reset the framebuf in
-        # case we had a partial frame in there that will never arrive.
+        if (!defined $len) {
+            $self->logger->warn("error reading frame: $!");
+        }
+        # EOF or error detected - connection is gone. We have to reset
+        # the framebuf in case we had a partial frame in there that
+        # will never arrive.
+        $self->socket->close;
         $self->{_framebuf} = "";
         delete $self->{_command};
         delete $self->{_headers};

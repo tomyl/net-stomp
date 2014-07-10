@@ -59,7 +59,7 @@ sub sysread {
     my ($self,$dest,$length,$offset) = @_;
 
     my $string = ref($self->{to_read})?($self->{to_read}->()):($self->{to_read});
-
+    return if not defined $string;
     my $ret = substr($string,0,$length,'');
     substr($_[1],$offset) = $ret;
     return length $ret;
