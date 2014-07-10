@@ -1,6 +1,7 @@
 #!perl
 use lib 't/lib';
 use TestHelp;
+use Net::Stomp::Frame;
 
 my ($s,$fh) = mkstomp_testsocket;
 

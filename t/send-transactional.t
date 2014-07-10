@@ -1,7 +1,6 @@
 use lib 't/lib';
 use TestHelp;
 use Net::Stomp::Frame;
-use Data::Printer;
 
 my ($s,$fh)=mkstomp_testsocket();
 
@@ -50,7 +49,7 @@ sub _testit {
             headers => {transaction => ignore()},
         ),
         'begin ok',
-    ) or note p $frames[0];
+    );
     my $transaction = $frames[0]->headers->{transaction};
 
     cmp_deeply(
@@ -65,7 +64,7 @@ sub _testit {
             body => 'string',
         ),
         'send ok',
-    ) or note p $frames[1];
+    );
 
     cmp_deeply(
         $frames[2],
@@ -76,7 +75,7 @@ sub _testit {
             },
         ),
         "\L$expected\E ok",
-    ) or note p $frames[2];
+    );
 }
 
 subtest 'successful' => sub {
