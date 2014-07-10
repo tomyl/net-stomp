@@ -165,8 +165,10 @@ sub _reconnect {
     if ($self->socket) {
         $self->socket->close;
     }
+    $self->logger->warn("reconnecting");
     eval { $self->_get_connection };
     while ($@) {
+        $self->logger->warn("Failed to reconnect: $@; retrying");
         sleep($self->connect_delay);
         eval { $self->_get_connection };
     }
@@ -291,15 +293,18 @@ sub send_frame {
             $self->logger->warn(q{wasn't connected; couldn't _reconnect()});
         }
     }
-    my $written = $self->socket->syswrite( $frame->as_string );
-    if (($written||0) != length($frame->as_string)) {
-        $self->logger->warn('only wrote '
-            . ($written||0)
-            . ' characters out of the '
-            . length($frame->as_string)
-            . ' character frame <<' . $frame->as_string . '>>');
+    # keep writing until we finish, or get an error
+    my $to_write = my $frame_string = $frame->as_string;
+    my $written;
+    while (length($to_write)) {
+        $written = $self->socket->syswrite($to_write);
+        last unless defined $written;
+        substr($to_write,0,$written,'');
     }
-    unless (defined $self->_connected) {
+    if (not defined $written) {
+        $self->logger->warn("error writing frame <<$frame_string>>: $!");
+    }
+    unless (defined $written && defined $self->_connected) {
         $self->_reconnect;
         $self->send_frame($frame);
     }
