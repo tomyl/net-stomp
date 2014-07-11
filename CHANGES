@@ -9,6 +9,7 @@ Revision history for Perl module Net::Stomp:
   - Net::Stomp::Frame::parse now actually exists (it was documented
     but not implemented)
   - fix RT #35194 'ack' now allow arbitrary headers
+  - more accessors on ::Frame, fix RT #90100
 
 0.46 Tue Jan 14 12:21:43 GMT 2014
   - Recommend modules required for IPv6 support (Dagfinn Ilmari Mannsåker)

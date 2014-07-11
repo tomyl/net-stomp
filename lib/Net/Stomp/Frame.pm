@@ -6,7 +6,7 @@ __PACKAGE__->mk_accessors(qw(command headers body));
 
 BEGIN {
     for my $header (
-        qw(destination exchange content-type content-length message-id))
+        qw(destination exchange content-type content-length message-id reply-to))
     {
         my $method = $header;
         $method =~ s/-/_/g;
@@ -17,6 +17,13 @@ BEGIN {
             $self->headers->{$header};
         };
     }
+}
+
+sub new {
+    my $class = shift;
+    my $self  = $class->SUPER::new(@_);
+    $self->headers({}) unless defined $self->headers;
+    return $self;
 }
 
 sub as_string {
