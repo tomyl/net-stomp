@@ -348,7 +348,8 @@ sub _read_headers {
         }
         foreach my $line (split(/\n/, $raw_headers)) {
             my ($key, $value) = split(/\s*:\s*/, $line, 2);
-            $self->{_headers}->{$key} = $value;
+            $self->{_headers}{$key} = $value
+                unless defined $self->{_headers}{$key};
         }
         return 1;
     }
