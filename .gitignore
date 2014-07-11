@@ -5,7 +5,6 @@
 /blib/
 /Build
 /Makefile
-/META.yml
 /MYMETA.yml
 /*.tar.gz
 /Net-Stomp-*/

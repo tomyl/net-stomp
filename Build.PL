@@ -12,6 +12,10 @@ my $build = Module::Build->new(
         'IO::Select'            => '0',
         'Class::Accessor::Fast' => '0',
     },
+    test_requires      => {
+        'Test::More'            => '0',
+        'Test::Fatal'           => '0',
+    },
     recommends         => {
         'IO::Socket::IP'        => '0.20',
         'IO::Socket::SSL'       => '1.75',

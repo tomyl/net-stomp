@@ -2,7 +2,7 @@
 ^MANIFEST.bak$
 ^Build$
 ^Makefile
-
+~$
 ^\.DS_Store
 ^Net-Stomp-.*
 \.tar\.gz$
