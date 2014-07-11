@@ -1,6 +1,9 @@
 package Net::Stomp::Frame;
 use strict;
 use warnings;
+
+our $VERSION='0.47';
+
 use base 'Class::Accessor::Fast';
 __PACKAGE__->mk_accessors(qw(command headers body));
 
@@ -108,20 +111,14 @@ Net::Stomp::Frame - A STOMP Frame
   } );
   my $frame  = Net::Stomp::Frame->parse($string);
   my $string = $frame->as_string;
-  
+
 =head1 DESCRIPTION
 
-This module encapulates a Stomp frame. Stomp is the Streaming Text
-Orientated Messaging Protocol (or the Protocol Briefly Known as TTMP
-and Represented by the symbol :ttmp). It's a simple and easy to
-implement protocol for working with Message Orientated Middleware from
-any language. L<Net::Stomp> is useful for talking to Apache
-ActiveMQ, an open source (Apache 2.0 licensed) Java Message Service
-1.1 (JMS) message broker packed with many enterprise features.
+This module encapulates a Stomp frame.
 
 A Stomp frame consists of a command, a series of headers and a body.
 
-For details on the protocol see L<http://stomp.codehaus.org/Protocol>.
+For details on the protocol see L<https://stomp.github.io/>.
 
 =head1 METHODS
 
@@ -146,6 +143,19 @@ Create a new L<Net::Somp::Frame> given a string containing the serialised frame:
 Create a string containing the serialised frame representing the frame:
 
   my $string = $frame->as_string;
+
+=head2 command
+
+Get or set the frame command.
+
+=head2 body
+
+Get or set the frame body.
+
+=head2 headers
+
+Get or set the frame headers, as a hashref. All following methods are
+just shortcuts into this hashref.
 
 =head2 destination
 
@@ -178,6 +188,10 @@ L<Net::Stomp>.
 =head1 AUTHOR
 
 Leon Brocard <acme@astray.com>.
+
+=head1 CONTRIBUTORS
+
+Gianni Ceccarelli <dakkar@thenautilus.net>
 
 =head1 COPYRIGHT
 
