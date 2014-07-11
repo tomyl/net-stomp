@@ -941,6 +941,10 @@ not 0, this method will C<die>.
 
 L<Net::Stomp::Frame>.
 
+=head1 SOURCE REPOSITORY
+
+https://github.com/dakkar/Net-Stomp
+
 =head1 AUTHORS
 
 Leon Brocard <acme@astray.com>,
