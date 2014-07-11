@@ -279,8 +279,9 @@ sub unsubscribe {
 sub ack {
     my ( $self, $conf ) = @_;
     my $id    = $conf->{frame}->headers->{'message-id'};
+    delete $conf->{frame};
     my $frame = Net::Stomp::Frame->new(
-        { command => 'ACK', headers => { 'message-id' => $id } } );
+        { command => 'ACK', headers => { 'message-id' => $id, %$conf } } );
     $self->send_frame($frame);
 }
 

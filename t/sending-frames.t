@@ -36,6 +36,12 @@ subtest 'send and ack' => sub {
         headers=>{'message-id'=>12},
         body=>undef,
     );
+    _testit(
+        ack => {frame=>$message,receipt=>'foo'},
+        command=>'ACK',
+        headers=>{'message-id'=>12,receipt=>'foo'},
+        body=>undef,
+    );
 };
 
 subtest '(un)subscribe by id' => sub {
