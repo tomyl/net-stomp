@@ -1,5 +1,13 @@
 Revision history for Perl module Net::Stomp:
 0.47 ...
+  - a test suite! we now have good test coverage
+  - configurable reconnect delay (was fixed at 5 seconds)
+  - configurable logger, instead of just warn/carp
+  - handle partial writes, fixes RT #83047
+  - properly reconnect on write failure
+  - more robust reconnecting on read failure
+  - Net::Stomp::Frame::parse now actually exists (it was documented
+    but not implemented)
   - fix RT #35194 'ack' now allow arbitrary headers
 
 0.46 Tue Jan 14 12:21:43 GMT 2014
