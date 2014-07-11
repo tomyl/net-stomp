@@ -167,6 +167,10 @@ Get or set the C<exchange> header.
 
 Get or set the C<message-id> header.
 
+=head2 reply_to
+
+Get or set the C<reply-to> header.
+
 =head1 SEE ALSO
 
 L<Net::Stomp>.

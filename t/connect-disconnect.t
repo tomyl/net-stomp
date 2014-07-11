@@ -57,7 +57,7 @@ subtest 'disconnect' => sub {
             isa('Net::Stomp::Frame'),
             methods(
                 command => 'DISCONNECT',
-                headers => undef,
+                headers => {},
                 body => undef,
             ),
         ),
