@@ -12,6 +12,7 @@ __PACKAGE__->mk_accessors( qw(
     _cur_host failover hostname hosts port select serial session_id socket ssl
     ssl_options subscriptions _connect_headers bufsize
     reconnect_on_fork logger connect_delay
+    reconnect_attempts initial_reconnect_attempts
 ) );
 
 sub _logconfess {
@@ -33,6 +34,8 @@ sub new {
     $self->bufsize(8192) unless $self->bufsize;
     $self->connect_delay(5) unless defined $self->connect_delay;
     $self->reconnect_on_fork(1) unless defined $self->reconnect_on_fork;
+    $self->reconnect_attempts(0) unless defined $self->reconnect_attempts;
+    $self->initial_reconnect_attempts(1) unless defined $self->initial_reconnect_attempts;
 
     $self->logger(Net::Stomp::StupidLogger->new())
         unless $self->logger;
@@ -67,23 +70,40 @@ sub new {
     }
     $self->hosts(\@hosts) if @hosts;
 
-    my $err;
-    {
-        local $@ = 'run me!';
-        while($@) {
-            eval { $self->_get_connection };
-            last unless $@;
-            if (!@hosts || $self->_cur_host == $#hosts ) {
-                # We've cycled through all setup hosts. Die now. Can't die because
-                # $@ is localized.
-                $err = $@;
-                last;
-            }
-            sleep($self->connect_delay);
-        }
-    }
-    $self->_logdie($err) if $err;
+    $self->_get_connection_retrying(1);
+
     return $self;
+}
+
+sub _get_connection_retrying {
+    my ($self,$initial) = @_;
+
+    my $tries=0;
+    while(not eval { $self->_get_connection; 1 }) {
+        my $err = $@;$err =~ s{\n\z}{}sm;
+        ++$tries;
+        if($self->_should_stop_trying($initial,$tries)) {
+            # We've cycled enough. Die now.
+            $self->_logdie("Failed to connect: $err; giving up");
+        }
+        $self->logger->warn("Failed to connect: $err; retrying");
+        sleep($self->connect_delay);
+    }
+}
+
+sub _should_stop_trying {
+    my ($self,$initial,$tries) = @_;
+
+    my $max_tries = $initial
+        ? $self->initial_reconnect_attempts
+        : $self->reconnect_attempts;
+
+    return unless $max_tries > 0; # 0 means forever
+
+    if (defined $self->hosts) {
+        $max_tries *= @{$self->hosts}; # try at least once per host
+    }
+    return $tries >= $max_tries;
 }
 
 my $socket_class;
@@ -99,7 +119,7 @@ sub _get_connection {
         $self->port($hosts->[$self->_cur_host]->{port});
     }
     my $socket = $self->_get_socket;
-    $self->_logdie("Error connecting to " . $self->hostname . ':' . $self->port . ": $@")
+    $self->_logdie("Error connecting to " . $self->hostname . ':' . $self->port . ": $!")
         unless $socket;
 
     $self->select->remove($self->socket);
@@ -144,10 +164,12 @@ sub connect {
     $self->send_frame($frame);
     $frame = $self->receive_frame;
 
-    # Setting initial values for session id, as given from
-    # the stomp server
-    $self->session_id( $frame->headers->{session} );
-    $self->_connect_headers( $conf );
+    if ($frame && $frame->command eq 'CONNECTED') {
+        # Setting initial values for session id, as given from
+        # the stomp server
+        $self->session_id( $frame->headers->{session} );
+        $self->_connect_headers( $conf );
+    }
 
     return $frame;
 }
@@ -166,12 +188,10 @@ sub _reconnect {
         $self->socket->close;
     }
     $self->logger->warn("reconnecting");
-    eval { $self->_get_connection };
-    while ($@) {
-        $self->logger->warn("Failed to reconnect: $@; retrying");
-        sleep($self->connect_delay);
-        eval { $self->_get_connection };
-    }
+    $self->_get_connection_retrying(0);
+    # Both ->connect and ->subscribe can call _reconnect. It *should*
+    # work out fine in the end, worst scenario we send a few subscribe
+    # frame more than once
     $self->connect( $self->_connect_headers );
     for my $sub(keys %{$self->subscriptions}) {
         $self->subscribe($self->subscriptions->{$sub});
@@ -227,7 +247,8 @@ sub send_transactional {
 
     # check the receipt
     my $receipt_frame = $self->receive_frame;
-    if (   $receipt_frame->command eq 'RECEIPT'
+    if (   $receipt_frame
+        && $receipt_frame->command eq 'RECEIPT'
         && $receipt_frame->headers->{'receipt-id'} eq $receipt_id )
     {
 
@@ -291,13 +312,15 @@ sub send_frame {
     if (not defined $self->_connected) {
         $self->_reconnect;
         if (not defined $self->_connected) {
-            $self->logger->warn(q{wasn't connected; couldn't _reconnect()});
+            $self->_logdie(q{wasn't connected; couldn't _reconnect()});
         }
     }
     # keep writing until we finish, or get an error
     my $to_write = my $frame_string = $frame->as_string;
     my $written;
     while (length($to_write)) {
+        local $SIG{PIPE}='IGNORE'; # just in case writing to a closed
+                                   # socket kills us
         $written = $self->socket->syswrite($to_write);
         last unless defined $written;
         substr($to_write,0,$written,'');

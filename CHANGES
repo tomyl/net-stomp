@@ -10,6 +10,8 @@ Revision history for Perl module Net::Stomp:
     but not implemented)
   - fix RT #35194 'ack' now allow arbitrary headers
   - fix RT #80079 correctly pick the first value for repeated headers
+  - from RT #68160, allow changing the maximum number of reconnect attempts
+  - from RT #68160, ignore SIGPIPE while writing to the socket
   - more accessors on ::Frame, fix RT #90100
 
 0.46 Tue Jan 14 12:21:43 GMT 2014

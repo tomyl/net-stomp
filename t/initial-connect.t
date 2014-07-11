@@ -5,7 +5,11 @@ use Test::Fatal;
 
 our @sockets;
 {no warnings 'redefine';
- sub Net::Stomp::_get_socket { return shift @sockets }
+ sub Net::Stomp::_get_socket {
+     my $ret = shift @sockets;
+     $!=1 unless $ret;
+     return $ret;
+ }
 }
 
 subtest 'simplest case' => sub {
@@ -75,7 +79,20 @@ subtest 'two host, none' => sub {
     my $s;
     my $err = exception { $s=mkstomp(hosts=>[{hostname=>'one',port=>1234},{hostname=>'two',port=>3456}]) };
     cmp_deeply($s,undef,'expected failure');
+    cmp_deeply($err,re(qr{Error connecting.*giving up}),'expected exception');
+    ok(@sockets==0,'two attempts');
+};
+
+subtest 'two host, none, keep trying' => sub {
+    local @sockets=(undef,undef,undef,undef,undef,undef);
+    my $s;
+    my $err = exception { $s=mkstomp(
+        hosts=>[{hostname=>'one',port=>1234},{hostname=>'two',port=>3456}],
+        initial_reconnect_attempts => 2,
+    ) };
+    cmp_deeply($s,undef,'expected failure');
     cmp_deeply($err,re(qr{Error connecting}),'expected exception');
+    ok(@sockets==2,'four attempts');
 };
 
 subtest 'old style, failure' => sub {
@@ -84,6 +101,18 @@ subtest 'old style, failure' => sub {
     my $err = exception { $s=mkstomp(hosts=>undef,hostname=>'localhost',port=>61613,) };
     cmp_deeply($s,undef,'expected failure');
     cmp_deeply($err,re(qr{Error connecting}),'expected exception');
+};
+
+subtest 'old style, failure, keep trying' => sub {
+    local @sockets=(undef,undef,undef);
+    my $s;
+    my $err = exception { $s=mkstomp(
+        hosts=>undef,hostname=>'localhost',port=>61613,
+        initial_reconnect_attempts => 2,
+    ) };
+    cmp_deeply($s,undef,'expected failure');
+    cmp_deeply($err,re(qr{Error connecting}),'expected exception');
+    ok(@sockets==1,'two attempts');
 };
 
 done_testing;
