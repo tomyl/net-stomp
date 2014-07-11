@@ -6,8 +6,11 @@
 /Build
 /Makefile
 /MYMETA.yml
+/MYMETA.json
+/MANIFEST
+/META.yml
+/META.json
 /*.tar.gz
 /Net-Stomp-*/
 /.DS_Store
 /Makefile.*
-MYMETA.json

@@ -1,5 +1,5 @@
 Revision history for Perl module Net::Stomp:
-0.47 ...
+0.47 2014-07-11
   - a test suite! we now have good test coverage
   - configurable reconnect delay (was fixed at 5 seconds)
   - configurable logger, instead of just warn/carp
