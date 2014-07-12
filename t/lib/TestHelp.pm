@@ -26,7 +26,7 @@ sub mkstomp_testsocket {
 
 sub import {
     my $caller = caller;
-    eval "package $caller; strict->import; warnings->import; use Test::More; use Test::Deep;";
+    eval "package $caller; strict->import; warnings->import; use Test::More; use Test::Deep;1;" or die $@;
     no strict 'refs';
     *{"${caller}::mkstomp"}=\&mkstomp;
     *{"${caller}::mkstomp_testsocket"}=\&mkstomp_testsocket;

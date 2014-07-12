@@ -1,4 +1,8 @@
 Revision history for Perl module Net::Stomp:
+0.48 2014-07-12
+ - fix dependency for Test::Deep RT #97167
+ - better diagnostics when test modules are missing
+
 0.47 2014-07-11
   - a test suite! we now have good test coverage
   - configurable reconnect delay (was fixed at 5 seconds)

@@ -6,7 +6,7 @@ use Net::Stomp::Frame;
 use Carp qw(longmess);
 use base 'Class::Accessor::Fast';
 use Net::Stomp::StupidLogger;
-our $VERSION = '0.47';
+our $VERSION = '0.48';
 
 __PACKAGE__->mk_accessors( qw(
     _cur_host failover hostname hosts port select serial session_id socket ssl

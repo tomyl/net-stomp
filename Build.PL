@@ -14,6 +14,7 @@ my $build = Module::Build->new(
     },
     test_requires      => {
         'Test::More'            => '0',
+        'Test::Deep'            => '0',
         'Test::Fatal'           => '0',
     },
     recommends         => {
