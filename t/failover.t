@@ -16,7 +16,7 @@ subtest 'default reconnect attempts' => sub {
     {no warnings 'redefine';
      *Net::Stomp::_get_socket = sub {
          my ($self) = @_;
-         push @connected_hosts,$self->_cur_host;
+         push @connected_hosts,$self->current_host;
          if (@connected_hosts>4) {
              $fh->{connected}=1;
              return $fh;
@@ -56,7 +56,7 @@ subtest 'limiteh reconnect attempts' => sub {
     {no warnings 'redefine';
      *Net::Stomp::_get_socket = sub {
          my ($self) = @_;
-         push @connected_hosts,$self->_cur_host;
+         push @connected_hosts,$self->current_host;
          return undef;
      }
     };

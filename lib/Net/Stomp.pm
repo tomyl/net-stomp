@@ -9,7 +9,7 @@ use Net::Stomp::StupidLogger;
 our $VERSION = '0.48';
 
 __PACKAGE__->mk_accessors( qw(
-    _cur_host failover hostname hosts port select serial session_id socket ssl
+    current_host failover hostname hosts port select serial session_id socket ssl
     ssl_options subscriptions _connect_headers bufsize
     reconnect_on_fork logger connect_delay
     reconnect_attempts initial_reconnect_attempts
@@ -110,16 +110,16 @@ my $socket_class;
 sub _get_connection {
     my $self = shift;
     if (my $hosts = $self->hosts) {
-        if (defined $self->_cur_host && ($self->_cur_host < $#{$hosts} ) ) {
-            $self->_cur_host($self->_cur_host+1);
+        if (defined $self->current_host && ($self->current_host < $#{$hosts} ) ) {
+            $self->current_host($self->current_host+1);
         } else {
-            $self->_cur_host(0);
+            $self->current_host(0);
         }
-        my $h = $hosts->[$self->_cur_host];
+        my $h = $hosts->[$self->current_host];
         $self->hostname($h->{hostname});
         $self->port($h->{port});
-        $self->ssl($h->{ssl}) if defined $h->{ssl};
-        $self->ssl_options($h->{ssl_options}) if defined $h->{ssl_options};
+        $self->ssl($h->{ssl});
+        $self->ssl_options($h->{ssl_options} || {});
     }
     my $socket = $self->_get_socket;
     $self->_logdie("Error connecting to " . $self->hostname . ':' . $self->port . ": $!")
@@ -685,6 +685,11 @@ Arrayref of hashrefs, each having a C<hostname> key and a C<port> key,
 and optionall C<ssl> and C<ssl_options>. Connections will be attempted
 in order, looping around if necessary, depending on the values of L<<
 /C<initial_reconnect_attempts> >> and L<< /C<reconnect_attempts> >>.
+
+=head2 C<current_host>
+
+If using multiple hosts, this is the index (inside the L<< /C<hosts>
+>> array) of the one we're currently connected to.
 
 =head2 C<logger>
 
