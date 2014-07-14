@@ -46,12 +46,13 @@ subtest 'simplest case, old style' => sub {
 
 subtest 'two host, first one' => sub {
     local @sockets=(\*STDIN);
-    my $s = mkstomp(hosts=>[{hostname=>'one',port=>1234},{hostname=>'two',port=>3456}]);
+    my $s = mkstomp(hosts=>[{hostname=>'one',port=>1234},{hostname=>'two',port=>3456,ssl=>1}]);
     cmp_deeply(
         $s,
         methods(
             hostname => 'one',
             port => 1234,
+            ssl => bool(0),
             _cur_host => 0,
             socket => \*STDIN,
         ),
@@ -61,12 +62,14 @@ subtest 'two host, first one' => sub {
 
 subtest 'two host, second one' => sub {
     local @sockets=(undef,\*STDIN);
-    my $s = mkstomp(hosts=>[{hostname=>'one',port=>1234},{hostname=>'two',port=>3456}]);
+    my $s = mkstomp(hosts=>[{hostname=>'one',port=>1234},{hostname=>'two',port=>3456,ssl=>1,ssl_options=>{a=>'b'}}]);
     cmp_deeply(
         $s,
         methods(
             hostname => 'two',
             port => 3456,
+            ssl => 1,
+            ssl_options => {a=>'b'},
             _cur_host => 1,
             socket => \*STDIN,
         ),

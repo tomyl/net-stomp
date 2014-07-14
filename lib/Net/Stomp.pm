@@ -115,8 +115,11 @@ sub _get_connection {
         } else {
             $self->_cur_host(0);
         }
-        $self->hostname($hosts->[$self->_cur_host]->{hostname});
-        $self->port($hosts->[$self->_cur_host]->{port});
+        my $h = $hosts->[$self->_cur_host];
+        $self->hostname($h->{hostname});
+        $self->port($h->{port});
+        $self->ssl($h->{ssl}) if defined $h->{ssl};
+        $self->ssl_options($h->{ssl_options}) if defined $h->{ssl_options};
     }
     my $socket = $self->_get_socket;
     $self->_logdie("Error connecting to " . $self->hostname . ':' . $self->port . ": $!")
@@ -649,6 +652,20 @@ port here. If you modify this value during the lifetime of the
 object, the new value will be used for the subsequent reconnect
 attempts.
 
+=head2 C<ssl>
+
+Boolean, defaults to false, whether we should use SSL to talk to the
+single broker. If you modify this value during the lifetime of the
+object, the new value will be used for the subsequent reconnect
+attempts.
+
+=head2 C<ssl_options>
+
+Options to pass to L<< /C<IO::Socket::SSL> >> when connecting via SSL
+to the single broker. If you modify this value during the lifetime of
+the object, the new value will be used for the subsequent reconnect
+attempts.
+
 =head2 C<failover>
 
 Modifying this attribute after the object has been constructed has no
@@ -664,20 +681,10 @@ This is equivalent to setting L<< /C<hosts> >> to:
 
 =head2 C<hosts>
 
-Arrayref of hashrefs, each having a C<hostname> key and a C<port>
-key. Connections will be attempted in order, looping around if
-necessary, depending on the values of L<<
+Arrayref of hashrefs, each having a C<hostname> key and a C<port> key,
+and optionall C<ssl> and C<ssl_options>. Connections will be attempted
+in order, looping around if necessary, depending on the values of L<<
 /C<initial_reconnect_attempts> >> and L<< /C<reconnect_attempts> >>.
-
-=head2 C<ssl>
-
-Boolean, defaults to false, whether we should use SSL to talk to the
-brokers. Yes, this is global to all the L<< /C<hosts> >>, although it
-really should be per-host.
-
-=head2 C<ssl_options>
-
-Options to pass to L<< /C<IO::Socket::SSL> >> when connecting via SSL.
 
 =head2 C<logger>
 
