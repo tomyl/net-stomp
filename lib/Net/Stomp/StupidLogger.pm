@@ -3,7 +3,7 @@ use strict;
 use warnings;
 use Carp;
 
-our $VERSION = '0.49';
+our $VERSION = '0.50';
 
 sub new {
     my ($class,$levels) = @_;
