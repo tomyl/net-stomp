@@ -232,26 +232,13 @@ sub send {
     $self->send_frame($frame);
 }
 
-sub send_transactional {
+sub send_with_receipt {
     my ( $self, $conf ) = @_;
-    my $body = $conf->{body};
-    delete $conf->{body};
-
-    # begin the transaction
-    my $transaction_id = $self->_get_next_transaction;
-    my $begin_frame
-        = Net::Stomp::Frame->new(
-        { command => 'BEGIN', headers => { transaction => $transaction_id } }
-        );
-    $self->send_frame($begin_frame);
 
     # send the message
     my $receipt_id = $self->_get_next_transaction;
     $conf->{receipt} = $receipt_id;
-    $conf->{transaction} = $transaction_id;
-    my $message_frame = Net::Stomp::Frame->new(
-        { command => 'SEND', headers => $conf, body => $body } );
-    $self->send_frame($message_frame);
+    $self->send($conf);
 
     # check the receipt
     my $receipt_frame = $self->receive_frame;
@@ -264,7 +251,32 @@ sub send_transactional {
         && $receipt_frame->command eq 'RECEIPT'
         && $receipt_frame->headers->{'receipt-id'} eq $receipt_id )
     {
+        return 1;
+    } else {
+        return 0;
+    }
+}
 
+sub send_transactional {
+    my ( $self, $conf ) = @_;
+
+    # begin the transaction
+    my $transaction_id = $self->_get_next_transaction;
+    my $begin_frame
+        = Net::Stomp::Frame->new(
+        { command => 'BEGIN', headers => { transaction => $transaction_id } }
+        );
+    $self->send_frame($begin_frame);
+
+    $conf->{transaction} = $transaction_id;
+    my $receipt_frame;
+    my $ret = $self->send_with_receipt($conf,$receipt_frame);
+
+    if (@_ > 2) {
+        $_[2] = $receipt_frame;
+    }
+
+    if ( $ret ) {
         # success, commit the transaction
         my $frame_commit = Net::Stomp::Frame->new(
             {   command => 'COMMIT',
@@ -272,9 +284,7 @@ sub send_transactional {
             }
         );
         $self->send_frame($frame_commit);
-        return 1;
     } else {
-
         # some failure, abort transaction
         my $frame_abort = Net::Stomp::Frame->new(
             {   command => 'ABORT',
@@ -282,8 +292,8 @@ sub send_transactional {
             }
         );
         $self->send_frame($frame_abort);
-        return 0;
     }
+    return $ret;
 }
 
 sub _sub_key {
@@ -751,6 +761,48 @@ It's probably a good idea to pass a C<content-length> corresponding to
 the byte length of the C<body>; this is necessary if the C<body>
 contains a byte 0.
 
+=head2 C<send_with_receipt>
+
+This sends a message asking for a receipt, and fails if the receipt of
+the message is not acknowledged by the server:
+
+  $stomp->send_with_receipt(
+      { destination => '/queue/foo', body => 'test message' }
+  ) or die "Couldn't send the message!";
+
+If using ActiveMQ, you might also want to make the message persistent:
+
+  $stomp->send_transactional(
+      { destination => '/queue/foo', body => 'test message', persistent => 'true' }
+  ) or die "Couldn't send the message!";
+
+The actual frame sequence for a successful sending is:
+
+  -> SEND
+  <- RECEIPT
+
+The actual frame sequence for a failed sending is:
+
+  -> SEND
+  <- anything but RECEIPT
+
+If you are using this connection only to send (i.e. you've never
+called L<< /C<subscribe> >>), the only thing that could be received
+instead of a C<RECEIPT> is an C<ERROR> frame, but if you subscribed,
+the broker may well send a C<MESSAGE> before sending the
+C<RECEIPT>. B<DO NOT> use this method on a connection used for
+receiving.
+
+If you want to see the C<RECEIPT> or C<ERROR> frame, pass a scalar as
+a second parameter to the method, and it will be set to the received
+frame:
+
+  my $success = $stomp->send_transactional(
+      { destination => '/queue/foo', body => 'test message' },
+      $received_frame,
+  );
+  if (not $success) { warn $received_frame->as_string }
+
 =head2 C<send_transactional>
 
 This sends a message in transactional mode and fails if the receipt of the
@@ -765,6 +817,9 @@ If using ActiveMQ, you might also want to make the message persistent:
   $stomp->send_transactional(
       { destination => '/queue/foo', body => 'test message', persistent => 'true' }
   ) or die "Couldn't send the message!";
+
+C<send_transactional> just wraps C<send_with_receipt> in a STOMP
+transaction.
 
 The actual frame sequence for a successful sending is:
 
