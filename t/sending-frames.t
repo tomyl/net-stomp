@@ -11,7 +11,8 @@ my ($s,$fh)=mkstomp_testsocket();
 sub _testit {
     my ($method,$arg,@tests) = @_;
     @frames=();
-    $s->$method($arg);
+    my $ret = $s->$method($arg);
+    ok($ret,"$method returned true");
     cmp_deeply(
         \@frames,
         [all(

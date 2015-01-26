@@ -6,13 +6,13 @@ use Net::Stomp::Frame;
 use Carp qw(longmess);
 use base 'Class::Accessor::Fast';
 use Net::Stomp::StupidLogger;
-our $VERSION = '0.50';
+our $VERSION = '0.51';
 
 __PACKAGE__->mk_accessors( qw(
     current_host failover hostname hosts port select serial session_id socket ssl
     ssl_options subscriptions _connect_headers bufsize
     reconnect_on_fork logger connect_delay
-    reconnect_attempts initial_reconnect_attempts
+    reconnect_attempts initial_reconnect_attempts timeout
 ) );
 
 sub _logconfess {
@@ -136,11 +136,14 @@ sub _get_socket {
     my ($self) = @_;
     my $socket;
 
+    my $timeout = $self->timeout;
+    $timeout = 5 unless defined $timeout;
+
     my %sockopts = (
         PeerAddr => $self->hostname,
         PeerPort => $self->port,
         Proto    => 'tcp',
-        Timeout  => 5
+        Timeout  => $timeout,
     );
     if ( $self->ssl ) {
         eval { require IO::Socket::SSL };
@@ -189,6 +192,7 @@ sub disconnect {
     my $frame = Net::Stomp::Frame->new( { command => 'DISCONNECT' } );
     $self->send_frame($frame);
     $self->_close_socket;
+    return 1;
 }
 
 sub _reconnect {
@@ -219,7 +223,7 @@ sub can_read {
     }
 
     $conf ||= {};
-    my $timeout = exists $conf->{timeout} ? $conf->{timeout} : undef;
+    my $timeout = exists $conf->{timeout} ? $conf->{timeout} : $self->timeout;
     return $self->select->can_read($timeout) || 0;
 }
 
@@ -230,6 +234,7 @@ sub send {
     my $frame = Net::Stomp::Frame->new(
         { command => 'SEND', headers => $conf, body => $body } );
     $self->send_frame($frame);
+    return 1;
 }
 
 sub send_with_receipt {
@@ -310,6 +315,7 @@ sub subscribe {
     $self->send_frame($frame);
     my $subs = $self->subscriptions;
     $subs->{_sub_key($conf)} = $conf;
+    return 1;
 }
 
 sub unsubscribe {
@@ -318,7 +324,8 @@ sub unsubscribe {
         { command => 'UNSUBSCRIBE', headers => $conf } );
     $self->send_frame($frame);
     my $subs = $self->subscriptions;
-    delete $subs->{_sub_key($conf)}
+    delete $subs->{_sub_key($conf)};
+    return 1;
 }
 
 sub ack {
@@ -328,6 +335,7 @@ sub ack {
     my $frame = Net::Stomp::Frame->new(
         { command => 'ACK', headers => { 'message-id' => $id, %$conf } } );
     $self->send_frame($frame);
+    return 1;
 }
 
 sub send_frame {
@@ -356,6 +364,7 @@ sub send_frame {
         $self->_reconnect;
         $self->send_frame($frame);
     }
+    return;
 }
 
 sub _read_data {
@@ -460,7 +469,7 @@ sub _connected {
 sub receive_frame {
     my ($self, $conf) = @_;
 
-    my $timeout = exists $conf->{timeout} ? $conf->{timeout} : undef;
+    my $timeout = exists $conf->{timeout} ? $conf->{timeout} :  $self->timeout;
 
     unless (defined $self->_connected) {
         $self->_reconnect;
@@ -735,6 +744,11 @@ sleep of L<< /C<connect_delay> >> seconds.
 Integer, defaults to 5. How many seconds to sleep between connection
 attempts to brokers.
 
+=head2 C<timeout>
+
+Integer, in seconds, defaults to C<undef>. The default timeout for
+read operations. C<undef> means "wait forever".
+
 =head1 METHODS
 
 =head2 C<connect>
@@ -761,10 +775,13 @@ It's probably a good idea to pass a C<content-length> corresponding to
 the byte length of the C<body>; this is necessary if the C<body>
 contains a byte 0.
 
+Always returns a true value. It automatically reconnects if writing to
+the socket fails.
+
 =head2 C<send_with_receipt>
 
-This sends a message asking for a receipt, and fails if the receipt of
-the message is not acknowledged by the server:
+This sends a message asking for a receipt, and returns false if the
+receipt of the message is not acknowledged by the server:
 
   $stomp->send_with_receipt(
       { destination => '/queue/foo', body => 'test message' }
@@ -805,8 +822,8 @@ frame:
 
 =head2 C<send_transactional>
 
-This sends a message in transactional mode and fails if the receipt of the
-message is not acknowledged by the server:
+This sends a message in transactional mode and returns false if the
+receipt of the message is not acknowledged by the server:
 
   $stomp->send_transactional(
       { destination => '/queue/foo', body => 'test message' }
@@ -862,10 +879,14 @@ If you call any other method after this, a new connection will be
 established automatically (to the next failover host, if there's more
 than one).
 
+Always returns a true value.
+
 =head2 C<subscribe>
 
 This subscribes you to a queue or topic. You must pass in a
 C<destination>.
+
+Always returns a true value.
 
 The acknowledge mode (header C<ack>) defaults to C<auto>, which means
 that frames will be considered delivered after they have been sent to
@@ -956,6 +977,8 @@ C<destination> or an C<id>:
 
   $stomp->unsubcribe({ destination => '/queue/foo' });
 
+Always returns a true value.
+
 =head2 C<receive_frame>
 
 This blocks and returns you the next Stomp frame, or C<undef> if there
@@ -964,8 +987,9 @@ was a connection problem.
   my $frame = $stomp->receive_frame;
   warn $frame->body; # do something here
 
-By default this method will block until a frame can be returned. If you wish to
-wait for a specified time pass a C<timeout> argument:
+By default this method will block until a frame can be returned, or
+for however long the L</timeout> attribue says. If you wish to wait
+for a specified time pass a C<timeout> argument:
 
   # Wait half a second for a frame, else return undef
   $stomp->receive_frame({ timeout => 0.5 })
@@ -978,8 +1002,9 @@ STOMP server. Optionally takes a timeout in seconds:
   my $can_read = $stomp->can_read;
   my $can_read = $stomp->can_read({ timeout => '0.1' });
 
-C<undef> says block until something can be read, C<0> says to poll and return
-immediately.
+C<undef> says block until something can be read, C<0> says to poll and
+return immediately. This method ignores the value of the L</timeout>
+attribute.
 
 =head2 C<ack>
 
@@ -987,6 +1012,8 @@ This acknowledges that you have received and processed a frame I<and
 all frames before it> (if you are using client acknowledgements):
 
   $stomp->ack( { frame => $frame } );
+
+Always returns a true value.
 
 =head2 C<send_frame>
 
@@ -1003,6 +1030,8 @@ will keep trying to send the frame as hard as it can, reconnecting if
 the connection breaks (limited by L<< /C<reconnect_attempts> >>). If
 no connection can be established, and L<< /C<reconnect_attempts> >> is
 not 0, this method will C<die>.
+
+Always returns an empty list.
 
 =head1 SEE ALSO
 

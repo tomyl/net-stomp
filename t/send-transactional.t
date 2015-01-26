@@ -28,7 +28,7 @@ $fh->{written} = sub {
 # -> COMMIT
 
 sub _testit {
-    my ($response_frame,$expected) = @_;
+    my ($response_frame,$expected_ret,$expected_command) = @_;
     $fh->{to_read} = sub {
         if ($frames[1]) {
             return $response_frame->($frames[1]->headers->{receipt})
@@ -38,7 +38,9 @@ sub _testit {
     };
 
     @frames=();
-    $s->send_transactional({some=>'header',body=>'string'});
+    my $ret = $s->send_transactional({some=>'header',body=>'string'});
+
+    cmp_deeply($ret,bool($expected_ret),"expected return value");
 
     is(scalar(@frames),3,'3 frames sent');
 
@@ -69,12 +71,12 @@ sub _testit {
     cmp_deeply(
         $frames[2],
         methods(
-            command => uc($expected),
+            command => uc($expected_command),
             headers => {
                 transaction=>$transaction,
             },
         ),
-        "\L$expected\E ok",
+        "\L$expected_command\E ok",
     );
 }
 
@@ -83,7 +85,7 @@ subtest 'successful' => sub {
         command=>'RECEIPT',
         headers=>{'receipt-id'=>$_[0]},
         body=>undef,
-    }) },'COMMIT');
+    }) },1,'COMMIT');
 };
 
 subtest 'failed' => sub {
@@ -91,7 +93,7 @@ subtest 'failed' => sub {
         command=>'ERROR',
         headers=>{some=>'header'},
         body=>undef,
-    }) },'ABORT');
+    }) },0,'ABORT');
 };
 
 subtest 'bad receipt' => sub {
@@ -99,7 +101,7 @@ subtest 'bad receipt' => sub {
         command=>'RECEIPT',
         headers=>{'receipt-id'=>"not-$_[0]"},
         body=>undef,
-    }) },'ABORT');
+    }) },0,'ABORT');
 };
 
 done_testing;

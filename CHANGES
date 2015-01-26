@@ -1,4 +1,8 @@
 Revision history for Perl module Net::Stomp:
+0.51 2015-01-26
+ - fix and document return values of all methods
+ - add global read timeout attribute
+
 0.50 2015-01-26
  - extract send_with_receipt from inside send_transactional
 

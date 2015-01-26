@@ -2,9 +2,19 @@ use lib 't/lib';
 use TestHelp;
 use Net::Stomp::Frame;
 
-my ($s,$fh)=mkstomp_testsocket();
+my ($s,$fh)=mkstomp_testsocket(timeout=>1);
 
 subtest 'one frame' => sub {
+    my $timeout_in_call;
+
+    my $orig = \&Net::Stomp::_read_data;
+    no warnings 'redefine';
+    local *Net::Stomp::_read_data = sub {
+        my ($self,$timeout) = @_;
+        $timeout_in_call=$timeout;
+        $self->$orig($timeout);
+    };
+
     my $frame = Net::Stomp::Frame->new({
         command=>'MESSAGE',
         headers=>{'message-id'=>1},
@@ -14,6 +24,11 @@ subtest 'one frame' => sub {
     $fh->{to_read}=$frame->as_string;
     my $received = $s->receive_frame;
     cmp_deeply($received,$frame,'received and parsed');
+    is($timeout_in_call,1,'correct timeout passed');
+
+    $fh->{to_read}=$frame->as_string;
+    $received = $s->receive_frame({timeout=>3});
+    is($timeout_in_call,3,'correct timeout passed');
 };
 
 subtest 'two frames' => sub {

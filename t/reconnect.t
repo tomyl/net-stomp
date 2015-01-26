@@ -200,4 +200,13 @@ subtest 'report failure if sysread EOF' => sub {
     _test_receive;
 };
 
+subtest 'send_with_receipt report failure if receive_frame does' => sub {
+    my $ret = do {
+        local $fh->{to_read} = sub {$!=1;return};
+        $s->send_with_receipt({some=>'header',body=>'string'});
+    };
+    ok(!$ret,'reported false');
+    ok(!defined($fh->{connected}),'socket closed');
+};
+
 done_testing;
