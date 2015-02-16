@@ -1,4 +1,8 @@
 Revision history for Perl module Net::Stomp:
+0.52 2015-02-16
+ - add socket_options attribute
+ - add TCP keep-alive support
+
 0.51 2015-01-26
  - fix and document return values of all methods
  - add global read timeout attribute

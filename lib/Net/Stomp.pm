@@ -10,7 +10,7 @@ our $VERSION = '0.51';
 
 __PACKAGE__->mk_accessors( qw(
     current_host failover hostname hosts port select serial session_id socket ssl
-    ssl_options subscriptions _connect_headers bufsize
+    ssl_options socket_options subscriptions _connect_headers bufsize
     reconnect_on_fork logger connect_delay
     reconnect_attempts initial_reconnect_attempts timeout
 ) );
@@ -36,6 +36,7 @@ sub new {
     $self->reconnect_on_fork(1) unless defined $self->reconnect_on_fork;
     $self->reconnect_attempts(0) unless defined $self->reconnect_attempts;
     $self->initial_reconnect_attempts(1) unless defined $self->initial_reconnect_attempts;
+    $self->socket_options({}) unless defined $self->socket_options;
 
     $self->logger(Net::Stomp::StupidLogger->new())
         unless $self->logger;
@@ -140,11 +141,14 @@ sub _get_socket {
     $timeout = 5 unless defined $timeout;
 
     my %sockopts = (
+        Timeout  => $timeout,
+        %{ $self->socket_options },
         PeerAddr => $self->hostname,
         PeerPort => $self->port,
         Proto    => 'tcp',
-        Timeout  => $timeout,
     );
+    my $keep_alive = delete $sockopts{keep_alive};
+
     if ( $self->ssl ) {
         eval { require IO::Socket::SSL };
         $self->_logdie(
@@ -157,6 +161,15 @@ sub _get_socket {
             || do { require IO::Socket::INET; "IO::Socket::INET" };
         $socket = $socket_class->new(%sockopts);
         binmode($socket) if $socket;
+    }
+    if ($keep_alive) {
+        require Socket;
+        if (Socket->can('SO_KEEPALIVE')) {
+            $socket->setsockopt(Socket::SOL_SOCKET(),Socket::SO_KEEPALIVE(),1);
+        }
+        else {
+            $self->logger->warn(q{TCP keep-alive was requested, but the Socket module does not export the SO_KEEPALIVE constant, so we couldn't enable it});
+        }
     }
 
     return $socket;
@@ -671,6 +684,18 @@ port here. If you modify this value during the lifetime of the
 object, the new value will be used for the subsequent reconnect
 attempts.
 
+=head2 C<socket_options>
+
+Optional hashref, it will be passed to the L<IO::Socket::IP>,
+L<IO::Socket::SSL>, or L<IO::Socket::INET> constructor every time we
+need to get a socket.
+
+In addition to the various options supported by those classes, you can
+set C<keep_alive> to a true value, which will enable TCP-level
+keep-alive on the socket (see L<the TCP Keepalive
+HOWTO|http://www.tldp.org/HOWTO/html_single/TCP-Keepalive-HOWTO/> for
+some information on that feature).
+
 =head2 C<ssl>
 
 Boolean, defaults to false, whether we should use SSL to talk to the
@@ -680,9 +705,9 @@ attempts.
 
 =head2 C<ssl_options>
 
-Options to pass to L<< /C<IO::Socket::SSL> >> when connecting via SSL
-to the single broker. If you modify this value during the lifetime of
-the object, the new value will be used for the subsequent reconnect
+Options to pass to L<IO::Socket::SSL> when connecting via SSL to the
+single broker. If you modify this value during the lifetime of the
+object, the new value will be used for the subsequent reconnect
 attempts.
 
 =head2 C<failover>
