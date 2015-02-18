@@ -3,6 +3,7 @@ Revision history for Perl module Net::Stomp:
  - add receipt_timeout attribute, to make sure we give up when no
    receipt comes (usually because of network problems)
  - test whan happens when timing out while waiting for the receipt
+ - make sure to never modify the passed-in hashrefs
 
 0.52 2015-02-16
  - add socket_options attribute

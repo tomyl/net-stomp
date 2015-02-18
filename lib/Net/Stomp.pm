@@ -242,6 +242,7 @@ sub can_read {
 
 sub send {
     my ( $self, $conf ) = @_;
+    $conf = { %$conf };
     my $body = $conf->{body};
     delete $conf->{body};
     my $frame = Net::Stomp::Frame->new(
@@ -252,6 +253,7 @@ sub send {
 
 sub send_with_receipt {
     my ( $self, $conf ) = @_;
+    $conf = { %$conf };
 
     # send the message
     my $receipt_id = $self->_get_next_transaction;
@@ -283,6 +285,7 @@ sub send_with_receipt {
 sub send_transactional {
     my ( $self, $conf ) = @_;
 
+    $conf = { %$conf };
     # begin the transaction
     my $transaction_id = $self->_get_next_transaction;
     my $begin_frame
@@ -348,6 +351,7 @@ sub unsubscribe {
 
 sub ack {
     my ( $self, $conf ) = @_;
+    $conf = { %$conf };
     my $id    = $conf->{frame}->headers->{'message-id'};
     delete $conf->{frame};
     my $frame = Net::Stomp::Frame->new(
