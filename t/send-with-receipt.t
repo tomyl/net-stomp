@@ -2,7 +2,9 @@ use lib 't/lib';
 use TestHelp;
 use Net::Stomp::Frame;
 
-my ($s,$fh)=mkstomp_testsocket();
+my ($s,$fh)=mkstomp_testsocket(
+    receipt_timeout => 5,
+);
 
 my @frames;my $buffer='';
 $fh->{written} = sub {
@@ -34,7 +36,7 @@ sub _testit {
     };
 
     @frames=();
-    my $ret = $s->send_with_receipt({some=>'header',body=>'string'});
+    my $ret = $s->send_with_receipt({some=>'header',body=>'string',timeout=>5});
 
     is(scalar(@frames),1,'1 frame sent');
 
@@ -74,6 +76,14 @@ subtest 'bad receipt' => sub {
     _testit(sub{ Net::Stomp::Frame->new({
         command=>'RECEIPT',
         headers=>{'receipt-id'=>"not-$_[0]"},
+        body=>undef,
+    }) },0);
+};
+
+subtest 'no receipt (timeout)' => sub {
+    local $s->select->{can_read}=0;
+    _testit(sub{ Net::Stomp::Frame->new({
+        command=>'BLARGH',
         body=>undef,
     }) },0);
 };

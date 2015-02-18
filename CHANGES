@@ -1,4 +1,9 @@
 Revision history for Perl module Net::Stomp:
+0.53 2015-02-18
+ - add receipt_timeout attribute, to make sure we give up when no
+   receipt comes (usually because of network problems)
+ - test whan happens when timing out while waiting for the receipt
+
 0.52 2015-02-16
  - add socket_options attribute
  - add TCP keep-alive support

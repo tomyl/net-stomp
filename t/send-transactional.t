@@ -104,4 +104,12 @@ subtest 'bad receipt' => sub {
     }) },0,'ABORT');
 };
 
+subtest 'no receipt (timeout)' => sub {
+    local $s->select->{can_read}=0;
+    _testit(sub{ Net::Stomp::Frame->new({
+        command=>'BLARGH',
+        body=>undef,
+    }) },0,'ABORT');
+};
+
 done_testing;

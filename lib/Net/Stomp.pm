@@ -12,7 +12,7 @@ __PACKAGE__->mk_accessors( qw(
     current_host failover hostname hosts port select serial session_id socket ssl
     ssl_options socket_options subscriptions _connect_headers bufsize
     reconnect_on_fork logger connect_delay
-    reconnect_attempts initial_reconnect_attempts timeout
+    reconnect_attempts initial_reconnect_attempts timeout receipt_timeout
 ) );
 
 sub _logconfess {
@@ -256,10 +256,15 @@ sub send_with_receipt {
     # send the message
     my $receipt_id = $self->_get_next_transaction;
     $conf->{receipt} = $receipt_id;
+    my $receipt_timeout = exists $conf->{timeout} ? delete $conf->{timeout} : $self->receipt_timeout;
     $self->send($conf);
 
     # check the receipt
-    my $receipt_frame = $self->receive_frame;
+    my $receipt_frame = $self->receive_frame({
+        ( defined $receipt_timeout ?
+              ( timeout => $receipt_timeout )
+              : () ),
+    });
 
     if (@_ > 2) {
         $_[2] = $receipt_frame;
@@ -774,6 +779,13 @@ attempts to brokers.
 Integer, in seconds, defaults to C<undef>. The default timeout for
 read operations. C<undef> means "wait forever".
 
+=head2 C<receipt_timeout>
+
+Integer, in seconds, defaults to C<undef>. The default timeout while
+waiting for a receipt (in L<< /C<send_with_receipt> >> and L<<
+/C<send_transactional> >>). If C<undef>, the global L<< /C<timeout> >>
+is used.
+
 =head1 METHODS
 
 =head2 C<connect>
@@ -845,6 +857,11 @@ frame:
   );
   if (not $success) { warn $received_frame->as_string }
 
+You can specify a C<timeout> in the parametrs, just like for L<<
+/C<received_frame> >>. This function will wait for that timeout, or
+for L<< /C<receipt_timeout> >>, or for L<< /C<timeout> >>, whichever
+is defined, or forever, if none is defined.
+
 =head2 C<send_transactional>
 
 This sends a message in transactional mode and returns false if the
@@ -893,6 +910,11 @@ frame:
       $received_frame,
   );
   if (not $success) { warn $received_frame->as_string }
+
+You can specify a C<timeout> in the parametrs, just like for L<<
+/C<received_frame> >>. This function will wait for that timeout, or
+for L<< /C<receipt_timeout> >>, or for L<< /C<timeout> >>, whichever
+is defined, or forever, if none is defined.
 
 =head2 C<disconnect>
 
