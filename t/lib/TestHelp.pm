@@ -75,7 +75,12 @@ sub new { bless {can_read=>1},$_[0] }
 sub add { $_[0]->{socket}=$_[1] }
 sub remove { delete $_[0]->{socket} }
 
-sub can_read { return $_[0]->{socket} && $_[0]->{can_read} }
+sub can_read {
+    my ($self) = @_;
+    return unless $self->{socket};
+    my $can_read = ref($self->{can_read})?($self->{can_read}->()):($self->{can_read});
+    return $can_read;
+}
 }
 
 {package TestHelp::Logger;
