@@ -1,7 +1,6 @@
 use lib 't/lib';
 use TestHelp;
 use Net::Stomp::Frame;
-use Data::Printer;
 
 my ($s,$fh)=mkstomp_testsocket(timeout=>1);
 

@@ -1,4 +1,7 @@
 Revision history for Perl module Net::Stomp:
+0.55 2015-03-26
+ - drop "use Data::Printer" leftover from debugging
+
 0.54 2015-03-25
  - when reading times out in the middle of a frame, but the connection
    is still up, keep parsing the current frame instead of getting
