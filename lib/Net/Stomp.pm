@@ -956,7 +956,7 @@ Other options:
 =item C<selector>
 
 Specifies a JMS Selector using SQL 92 syntax as specified in the JMS
-1.1 specificiation. This allows a filter to be applied to each message
+1.1 specification. This allows a filter to be applied to each message
 as part of the subscription.
 
 =item C<id>
