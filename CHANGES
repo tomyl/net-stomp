@@ -1,4 +1,9 @@
 Revision history for Perl module Net::Stomp:
+0.56 2015-06-27
+ - fix typo (thanks POLETTIX)
+ - fix boundary condition when receiving frames with content-length,
+   RT #105500 (thanks Dryapak Grigory)
+
 0.55 2015-03-26
  - drop "use Data::Printer" leftover from debugging
 

@@ -97,4 +97,33 @@ subtest 'a few bytes at a time, with content-length' => sub {
 
 };
 
+subtest 'buffer boundary condition' => sub {
+    # this is a regression test for RT #105500, thanks Dryapak Grigory
+    # for reporting it
+    my $str = "string\0with\0zeroes\0";
+    my $frame = Net::Stomp::Frame->new({
+        command=>'MESSAGE',
+        body=>$str,
+        headers=>{
+            'message-id'=>1,
+            'content-length'=>length($str),
+        },
+    });
+    my $frame_string = $frame->as_string;
+    # the first read gets the entire frame *minus the terminating 0*
+    # the second read gets the zero
+    my $bufsize = length($frame_string)-1;
+    $s->bufsize($bufsize);
+    # let's add another frame
+    $frame_string .= $frame_string;
+
+    $fh->{to_read} = sub {
+        return substr($frame_string,0,$bufsize,'');
+    };
+    my $received = $s->receive_frame;
+    cmp_deeply($received,$frame,'received and parsed');
+    my $received = $s->receive_frame;
+    cmp_deeply($received,$frame,'received and parsed, twice');
+};
+
 done_testing;

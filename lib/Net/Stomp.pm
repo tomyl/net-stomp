@@ -6,7 +6,7 @@ use Net::Stomp::Frame;
 use Carp qw(longmess);
 use base 'Class::Accessor::Fast';
 use Net::Stomp::StupidLogger;
-our $VERSION = '0.55';
+our $VERSION = '0.56';
 
 __PACKAGE__->mk_accessors( qw(
     current_host failover hostname hosts port select serial session_id socket ssl
@@ -440,7 +440,7 @@ sub _read_body {
 
     my $h = $self->{_headers};
     if ($h->{'content-length'}) {
-        if (length($self->{_framebuf}) >= $h->{'content-length'}) {
+        if (length($self->{_framebuf}) > $h->{'content-length'}) {
             $self->{_framebuf_changed} = 1;
             my $body = substr($self->{_framebuf},
                               0,
