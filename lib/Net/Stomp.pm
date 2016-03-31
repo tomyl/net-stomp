@@ -360,6 +360,17 @@ sub ack {
     return 1;
 }
 
+sub nack {
+    my ( $self, $conf ) = @_;
+    $conf = { %$conf };
+    my $id    = $conf->{frame}->headers->{'message-id'};
+    delete $conf->{frame};
+    my $frame = Net::Stomp::Frame->new(
+        { command => 'NACK', headers => { 'message-id' => $id, %$conf } } );
+    $self->send_frame($frame);
+    return 1;
+}
+
 sub send_frame {
     my ( $self, $frame ) = @_;
     # see if we're connected before we try to syswrite()
@@ -1064,6 +1075,17 @@ This acknowledges that you have received and processed a frame I<and
 all frames before it> (if you are using client acknowledgements):
 
   $stomp->ack( { frame => $frame } );
+
+Always returns a true value.
+
+=head2 C<nack>
+
+This informs the remote end that you have been unable to process a
+received frame (if you are using client acknowledgements)
+(See individual stomp server documentation for information about
+additional fields that can be passed to alter NACK behavior):
+
+  $stomp->nack( { frame => $frame } );
 
 Always returns a true value.
 

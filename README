@@ -204,6 +204,14 @@ METHODS
 
       $stomp->ack( { frame => $frame } );
 
+  nack
+    This informs the remote end that you have been unable to process a
+    received frame (if you are using client acknowledgements)
+    (See individual stomp server documentation for information about
+    additional fields that can be passed to alter NACK behavior):
+
+      $stomp->nack( { frame => $frame } );
+
   send_frame
     If this module does not provide enough help for sending frames, you may
     construct your own frame and send it:
