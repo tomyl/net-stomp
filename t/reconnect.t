@@ -108,6 +108,11 @@ subtest 'reconnect on disconnect before send' => sub {
     _test_send;
 };
 
+subtest 'reconnect on disconnect before send (defined but false)' => sub {
+    $fh->{connected}=0; # fake a different kind of disconnect
+    _test_send;
+};
+
 subtest 'reconnect on disconnect while sending' => sub {
     # fake a disconnect after the syswrite, only once
     my $called=0;
