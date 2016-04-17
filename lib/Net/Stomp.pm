@@ -363,9 +363,9 @@ sub ack {
 sub send_frame {
     my ( $self, $frame ) = @_;
     # see if we're connected before we try to syswrite()
-    if (not defined $self->_connected) {
+    if (not $self->_connected) {
         $self->_reconnect;
-        if (not defined $self->_connected) {
+        if (not $self->_connected) {
             $self->_logdie(q{wasn't connected; couldn't _reconnect()});
         }
     }
@@ -382,7 +382,7 @@ sub send_frame {
     if (not defined $written) {
         $self->logger->warn("error writing frame <<$frame_string>>: $!");
     }
-    unless (defined $written && defined $self->_connected) {
+    unless (defined $written && $self->_connected) {
         $self->_reconnect;
         $self->send_frame($frame);
     }
@@ -494,7 +494,7 @@ sub receive_frame {
 
     my $timeout = exists $conf->{timeout} ? $conf->{timeout} :  $self->timeout;
 
-    unless (defined $self->_connected) {
+    unless ($self->_connected) {
         $self->_reconnect;
     }
 
