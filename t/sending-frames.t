@@ -45,6 +45,28 @@ subtest 'send and ack' => sub {
     );
 };
 
+subtest 'send and nack' => sub {
+    _testit(
+        send => {'message-id'=>12,body=>'string'},
+        command=>'SEND',
+        headers=>{'message-id'=>12},
+        body=>'string',
+    );
+    my $message = $frames[0];
+    _testit(
+        nack => {frame=>$message},
+        command=>'NACK',
+        headers=>{'message-id'=>12},
+        body=>undef,
+    );
+    _testit(
+        nack => {frame=>$message,receipt=>'foo'},
+        command=>'NACK',
+        headers=>{'message-id'=>12,receipt=>'foo'},
+        body=>undef,
+    );
+};
+
 subtest '(un)subscribe by id' => sub {
     _testit(
         subscribe => {id=>1,destination=>'/queue/foo'},
