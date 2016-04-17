@@ -122,7 +122,7 @@ subtest 'buffer boundary condition' => sub {
     };
     my $received = $s->receive_frame;
     cmp_deeply($received,$frame,'received and parsed');
-    my $received = $s->receive_frame;
+    $received = $s->receive_frame;
     cmp_deeply($received,$frame,'received and parsed, twice');
 };
 
