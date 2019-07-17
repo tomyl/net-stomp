@@ -1,3 +1,8 @@
+use strict;
+use warnings;
+BEGIN {$ENV{TAP_LOG_ORIGIN}=1; $ENV{TAP_LOG_SHOW_USAGE}=0 }
+use Log::Any::Adapter TAP => ( filter => 'debug' );
+
 {package TestHelp;
 use strict;
 use warnings;
@@ -8,7 +13,6 @@ use Test::Deep ();
 
 sub mkstomp {
     return Net::Stomp->new({
-        logger => TestHelp::Logger->new(),
         hosts => [ {hostname=>'localhost',port=>61613} ],
         connect_delay => 0,
         @_,
@@ -91,17 +95,6 @@ sub can_read {
     return unless $self->{socket};
     my $can_read = ref($self->{can_read})?($self->{can_read}->()):($self->{can_read});
     return $can_read;
-}
-}
-
-{package TestHelp::Logger;
-use strict;
-use warnings;
-use base 'Net::Stomp::StupidLogger';
-
-sub _log {
-    my ($self,$level,@etc) = @_;
-    Test::More::note("log $level: @etc");
 }
 }
 
