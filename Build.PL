@@ -16,6 +16,7 @@ my $build = Module::Build->new(
         'Test::More'            => '0',
         'Test::Deep'            => '0',
         'Test::Fatal'           => '0',
+        'Test::NiceDump'         => '1.0.0',
     },
     recommends         => {
         'IO::Socket::IP'        => '0.20',

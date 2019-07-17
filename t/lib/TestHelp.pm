@@ -3,6 +3,8 @@ use strict;
 use warnings;
 BEGIN { $INC{'IO/Select.pm'}=__FILE__ }
 use Net::Stomp;
+use Test::NiceDump ();
+use Test::Deep ();
 
 sub mkstomp {
     return Net::Stomp->new({
@@ -24,12 +26,21 @@ sub mkstomp_testsocket {
     return ($s,$fh);
 }
 
+sub cmp {
+    my ($got,$expected,$message) = @_;
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    Test::Deep::cmp_deeply(
+        $got, $expected, $message
+    ) or Test::NiceDump::nice_explain($got,$expected);
+}
+
 sub import {
     my $caller = caller;
-    eval "package $caller; strict->import; warnings->import; use Test::More; use Test::Deep;1;" or die $@;
+    eval "package $caller; strict->import; warnings->import; use Test::More; use Test::Deep '!cmp_deeply';1;" or die $@;
     no strict 'refs';
     *{"${caller}::mkstomp"}=\&mkstomp;
     *{"${caller}::mkstomp_testsocket"}=\&mkstomp_testsocket;
+    *{"${caller}::cmp_deeply"}=\&cmp;
     return;
 }
 }
