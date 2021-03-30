@@ -193,7 +193,7 @@ sub connect {
         $self->_connect_headers( $conf );
     }
     else {
-        $self->logger->warn('failed to connect',{ %{$frame} });
+        $self->logger->warn('failed to connect',{ %{$frame // {}} });
     }
 
     return $frame;
