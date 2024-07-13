@@ -1,5 +1,33 @@
 Revision history for Perl module Net::Stomp:
 
+0.63 2024-07-13
+ - Net::Stomp object is now aware of the STOMP protocol version
+   and uses that as part of the ACK/NACK, SUBSCRIBE/UNSUBSCRIBE
+   implementations.
+ - Use of "accept-version" and "heart-beat" headers during CONNECT
+   are now documented and handled more explicitly.
+ - send_heartbeat($interval) is a new method that is meant to be
+   used inside your receive_frame loop if you want to support
+   heartbeats to keep an idle connection alive. This should be
+   combined with the "heart-beat" and "accept-version" CONNECT
+   headers (only STOMP 1.1 and 1.2 officially support heartbeats).
+   Using heartbeats helps fix connection problems with brokers like
+   ArtemisMQ which enforces an idle connection TTL of 60 seconds
+   even when you use STOMP 1.0.
+ - In cases where you are expecting RECEIPT messages they can be
+   interleaved with other MESSAGE messages. receive_frame now allows
+   the caller to specify "command" => "RECEIPT" and similarly
+   "command" => "CONNECTED" when it is waiting for a particular
+   response message. Any MESSAGE messages arriving at the same time
+   will be buffered for subsequent receive_frame calls. If an ERROR
+   frame is encountered it will be returned from receive_frame
+   immediately. If no "command" option is specified for receive_frame
+   it has the same behavior as before and returns the next frame
+   regardless of type (which now may be an already buffered frame).
+ - On reconnects the _get_connection method now clears the internal
+   frame and message buffers to ensure we start the session from a
+   clean state.
+
 0.62 2024-02-08
  - "failover" URL now works together with "ssl" and "ssl_options"
    constructor arguments by applying the same SSL settings to all

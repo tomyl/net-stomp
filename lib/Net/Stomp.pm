@@ -6,7 +6,7 @@ use Net::Stomp::Frame;
 use Carp qw(longmess);
 use base 'Class::Accessor::Fast';
 use Log::Any;
-our $VERSION = '0.62';
+our $VERSION = '0.63';
 
 __PACKAGE__->mk_accessors( qw(
     current_host failover hostname hosts port select serial session_id socket ssl
@@ -41,6 +41,9 @@ sub new {
     $self->logger(Log::Any->get_logger) unless $self->logger;
 
     $self->{_framebuf} = "";
+    $self->{_messages} = [];
+    # version can be overridden by negotiation during CONNECT/CONNECTED
+    $self->{_version} = '1.0';
 
     # We are not subscribed to anything at the start
     $self->subscriptions( {} );
@@ -74,6 +77,7 @@ sub new {
     $self->hosts(\@hosts) if @hosts;
 
     $self->_get_connection_retrying(1);
+    # $self->{_alive} is now initialized to time of latest network activity
 
     return $self;
 }
@@ -133,6 +137,9 @@ sub _get_connection {
     $self->select->add($socket);
     $self->socket($socket);
     $self->{_pid} = $$;
+    $self->{_framebuf} = "";
+    $self->{_messages} = [];
+
 }
 
 sub _get_socket {
@@ -186,17 +193,32 @@ sub connect {
     my $frame = Net::Stomp::Frame->new(
         { command => 'CONNECT', headers => $conf } );
     $self->send_frame($frame);
-    $frame = $self->receive_frame;
+    $frame = $self->receive_frame({ command => 'CONNECTED' });
 
     if ($frame && $frame->command eq 'CONNECTED') {
         $self->logger->trace('connected');
         # Setting initial values for session id, as given from
         # the stomp server
         $self->session_id( $frame->headers->{session} );
+        my $server_version = $frame->headers->{'accept-version'};
+        if ($server_version && !$conf->{'accept-version'}) {
+            if ($conf->{'accept-version'}) {
+                $self->logger->trace("server accept-version:$server_version");
+            } else {
+                $self->logger->warn("server responded with accept-version:$server_version despite us not using accept-version");
+            }
+            $self->{_version} = $server_version;
+        } else {
+            $self->{_version} = '1.0';
+        }
+        # We don't save the server negotiated protocol version.
+        # In ack/nack we guess the protocol version based on the
+        # available headers in the message we are acknowledgeing.
         $self->_connect_headers( $conf );
     }
     else {
-        $self->logger->warn('failed to connect',{ %{$frame // {}} });
+        # receive_frame has already logged ERROR frame
+        $self->logger->warn('failed to connect');
     }
 
     return $frame;
@@ -277,9 +299,8 @@ sub send_with_receipt {
     $self->logger->trace('waiting for receipt',$conf);
     # check the receipt
     my $receipt_frame = $self->receive_frame({
-        ( defined $receipt_timeout ?
-              ( timeout => $receipt_timeout )
-              : () ),
+        ( defined $receipt_timeout ?  ( timeout => $receipt_timeout ) : () ),
+        command => 'RECEIPT',
     });
 
     if (@_ > 2) {
@@ -293,7 +314,8 @@ sub send_with_receipt {
         $self->logger->debug('got good receipt',{ %{$receipt_frame} });
         return 1;
     } else {
-        $self->logger->debug('got bad receipt',{ %{$receipt_frame || {} } });
+        # receive_frame has already logged ERROR frame
+        $self->logger->warn('got bad receipt');
         return 0;
     }
 }
@@ -344,12 +366,15 @@ sub send_transactional {
 sub _sub_key {
     my ($conf) = @_;
 
-    if ($conf->{id}) { return "id-".$conf->{id} }
+    if (defined $conf->{id}) { return "id-".$conf->{id} }
     return "dest-".$conf->{destination}
 }
 
 sub subscribe {
     my ( $self, $conf ) = @_;
+    if (($self->{_version} eq '1.1' || $self->{_version} eq '1.2') && !defined $conf->{'id'}) {
+        $self->_logdie("protocol version $$self{_version} requires 'id' header in SUBSCRIBE messages");
+    }
     $self->logger->trace('subscribing',$conf);
     my $frame = Net::Stomp::Frame->new(
         { command => 'SUBSCRIBE', headers => $conf } );
@@ -361,6 +386,9 @@ sub subscribe {
 
 sub unsubscribe {
     my ( $self, $conf ) = @_;
+    if (($self->{_version} eq '1.1' || $self->{_version} eq '1.2') && !defined $conf->{'id'}) {
+        $self->_logdie("protocol version $$self{_version} requires 'id' header in UNSUBSCRIBE messages");
+    }
     $self->logger->trace('unsubscribing',$conf);
     my $frame = Net::Stomp::Frame->new(
         { command => 'UNSUBSCRIBE', headers => $conf } );
@@ -370,26 +398,51 @@ sub unsubscribe {
     return 1;
 }
 
+sub _ack_nack_headers {
+    my ( $self, $conf ) = @_;
+    my $headers = $conf->{frame}->headers;
+    my %result;
+    if ($self->{_version} eq '1.0') {
+        $result{'message-id'} = $headers->{'message-id'};
+    } elsif ($self->{_version} eq '1.1') {
+        $result{'message-id'} = $headers->{'message-id'};
+        if ($headers->{'subscription'}) {
+            $result{'subscription'} = $headers->{'subscription'};
+        } else {
+            $self->logger->trace('protocol version is 1.1 but messages does not contain "subscription" header, ACK/NACK will be version 1.0');
+        }
+    } elsif ($self->{_version} eq '1.2') {
+        if ($headers->{'ack'}) {
+            $result{'id'} = $headers->{'ack'};
+        } elsif ($headers->{'subscription'}) {
+            $result{'message-id'} = $headers->{'message-id'};
+            $result{'subscription'} = $headers->{'subscription'};
+            $self->logger->trace('protocol version is 1.2 but messages does not contain "ack" header, ACK/NACK will be version 1.1');
+        } else {
+            $result{'message-id'} = $headers->{'message-id'};
+            $self->logger->trace('protocol version is 1.2 but messages does not contain "ack" or "subscription" header, ACK/NACK will be version 1.0');
+        }
+    }
+    map { $result{$_} = $conf->{$_} if defined $conf->{$_} } qw(receipt transaction);
+    return %result;
+}
+
 sub ack {
     my ( $self, $conf ) = @_;
-    $conf = { %$conf };
-    my $id    = $conf->{frame}->headers->{'message-id'};
-    delete $conf->{frame};
-    $self->logger->trace('acking',{ 'message-id' => $id, %$conf });
+    my %headers = $self->_ack_nack_headers($conf);
+    $self->logger->trace('acking', \%headers);
     my $frame = Net::Stomp::Frame->new(
-        { command => 'ACK', headers => { 'message-id' => $id, %$conf } } );
+        { command => 'ACK', headers => \%headers } );
     $self->send_frame($frame);
     return 1;
 }
 
 sub nack {
     my ( $self, $conf ) = @_;
-    $conf = { %$conf };
-    my $id    = $conf->{frame}->headers->{'message-id'};
-    $self->logger->trace('nacking',{ 'message-id' => $id, %$conf });
-    delete $conf->{frame};
+    my %headers = $self->_ack_nack_headers($conf);
+    $self->logger->trace('nacking', \%headers);
     my $frame = Net::Stomp::Frame->new(
-        { command => 'NACK', headers => { 'message-id' => $id, %$conf } } );
+        { command => 'NACK', headers => \%headers } );
     $self->send_frame($frame);
     return 1;
 }
@@ -415,12 +468,38 @@ sub send_frame {
     }
     if (not defined $written) {
         $self->logger->warn("error writing frame <<$frame_string>>: $!");
+    } else {
+        $self->{_alive} = time;
     }
     unless (defined $written && $self->_connected) {
         $self->_reconnect;
         $self->send_frame($frame);
     }
     return;
+}
+
+sub send_heartbeat {
+    my ($self, $every_n_seconds) = @_;
+    # STOMP 1.0 technically does not support heartbeats but we choose to still
+    # allow that here. Explicit calls to send_heartbeat is done for a reason.
+    my $heartbeat_needed = 1;
+    if ($every_n_seconds) {
+        my $idle = time - $self->{_alive};
+        if ($idle < $every_n_seconds) {
+            $heartbeat_needed = 0;
+        }
+    }
+    if ($heartbeat_needed) {
+        local $SIG{PIPE} = 'IGNORE';
+        my $written = $self->socket->syswrite("\n");
+        if (!defined $written) {
+            $self->logger->warn("sending heartbeat failed, reconnecting: $!");
+            $self->_reconnect;
+        } else {
+            $self->socket->flush();
+            $self->{_alive} = time;
+        }
+    }
 }
 
 sub _read_data {
@@ -433,6 +512,7 @@ sub _read_data {
 
     if (defined $len && $len>0) {
         $self->{_framebuf_changed} = 1;
+        $self->{_alive} = time;
     }
     else {
         if (!defined $len) {
@@ -453,7 +533,10 @@ sub _read_headers {
     my ($self) = @_;
 
     return 1 if $self->{_headers};
-    if ($self->{_framebuf} =~ s/^\n*([^\n].*?)\n\n//s) {
+    # Strip out any heart-beat messages we might have received (empty line == heartbeat).
+    # Have seen some spurious NULLs from ArtemisMQ so stripping those also.
+    $self->{_framebuf} =~ s/^[\n\0]*//;
+    if ($self->{_framebuf} =~ s/^([^\n\0].*?)\n\n//s) {
         $self->{_framebuf_changed} = 1;
         my $raw_headers = $1;
         if ($raw_headers =~ s/^(.+)\n//) {
@@ -526,19 +609,45 @@ sub _connected {
 sub receive_frame {
     my ($self, $conf) = @_;
 
+    for (my $i = 0; $i < @{$self->{_messages}}; $i++) {
+        if (!$conf->{command} || $conf->{command} eq $self->{_messages}->[$i]->command) {
+            $self->logger->trace('return buffered frame');
+            my $msg = splice(@{$self->{_messages}}, $i, 1);
+            return $msg;
+        }
+    }
+
     $self->logger->trace('waiting to receive frame',$conf);
     my $timeout = exists $conf->{timeout} ? $conf->{timeout} :  $self->timeout;
 
     unless ($self->_connected) {
         $self->_reconnect;
     }
+    my $timeout_expired = time + ($timeout // 0);
+    my $done;
+    while (1) {
+        my $now = time;
+        if (defined $timeout) {
+            return undef if $now > $timeout_expired;
+            $timeout = $timeout_expired - $now;
+        }
+        while ( not $done = $self->_read_headers ) {
+            return undef unless $self->_read_data($timeout);
+        }
+        while ( not $done = $self->_read_body ) {
+            return undef unless $self->_read_data($timeout);
+        }
 
-    my $done = 0;
-    while ( not $done = $self->_read_headers ) {
-        return undef unless $self->_read_data($timeout);
-    }
-    while ( not $done = $self->_read_body ) {
-        return undef unless $self->_read_data($timeout);
+        # If client requested a specific command we may need to
+        # buffer other messages that were already in transit.
+        last if !$conf->{command};
+        last if $conf->{command} eq $done->command;
+        if ($done->command eq 'ERROR') {
+            $self->logger->warn('got ERROR frame', $done->as_string);
+            last;
+        }
+        $self->logger->trace('buffering frame');
+        push @{$self->{_messages}}, $done;
     }
 
     return $done;
@@ -826,7 +935,7 @@ is used.
 
 This starts the Stomp session with the Stomp server. You may pass in a
 C<login> and C<passcode> options, plus whatever other headers you may
-need (e.g. C<client-id>, C<host>).
+need (e.g. C<client-id>, C<host>, C<accept-version>, C<heart-beat>).
 
   $stomp->connect( { login => 'hello', passcode => 'there' } );
 
@@ -950,6 +1059,49 @@ You can specify a C<timeout> in the parametrs, just like for L<<
 for L<< /C<receipt_timeout> >>, or for L<< /C<timeout> >>, whichever
 is defined, or forever, if none is defined.
 
+=head2 C<send_heartbeat>
+
+If C<connect> was called with "accept-version" and "heart-beat" headers
+indicating that heartbeats should be used you may occasionally need to
+send so called heartbeats to indicate that the client is still alive and
+connected to the message broker despite there being no messages passed
+between the client and server.
+
+When using the "heart-beat" CONNECT header a client and server heartbeat
+time is specified and the server expects to see some activity from the
+client within 2x the client specified timeout, but really the expectation
+is that the client should either send or consume messages within that
+heartbeat time period or send an explicit heartbeat. A heartbeat consists
+of sending an empty line "\n" on the socket.
+
+The C<send_heartbeat> method helps with this and is meant to be used in
+a manner similar to the example below. If the optional timeout parameter
+is provided send_heartbeat will only sent a heartbeat linebreak if the
+connection has been idle for at least that long. If no timeout parameter
+is given (or the value is undef) the heartbeat linebreak is always sent.
+
+  my $timeout_ms = 30000;
+  my $timeout_sec = $timeout_ms / 1000;
+  $stomp->connect({
+      ...
+      "accept-version" => "1.0,1.1,1.2",
+      "heart-beat" => "$timeout_ms,$timeout_ms"
+  });
+  # subscribe etc.
+  while ($continue) {
+      my $msg = $stomp->receive_frame({ timeout => $timeout_sec });
+      if (!$msg) {
+          # This will only send a heartbeat if the socket has been idle
+          # for more than the given timeout so if you are receiving or
+          # sending messages regularly this will do nothing.
+          $stomp->send_heartbeat($timeout_sec);
+      } elsif ($msg->command eq 'ERROR') {
+          # handle ERROR message
+      } else {
+          # process MESSAGE, send ACK etc.
+      }
+  }
+
 =head2 C<disconnect>
 
 This disconnects from the Stomp server:
@@ -965,7 +1117,15 @@ Always returns a true value.
 =head2 C<subscribe>
 
 This subscribes you to a queue or topic. You must pass in a
-C<destination>.
+C<destination>. If you did protocol version negotiation during CONNECT
+with the "accept-version" header be aware that protocol versions 1.1
+and 1.2 both require an C<id> header to be passed in addition to the
+destination header.
+
+  # STOMP 1.0
+  $stomp->subcribe({ destination => '/queue/foo' });
+  # STOMP 1.1 and 1.2
+  $stomp->subcribe({ destination => '/queue/foo', id => 'myfoosub' });
 
 Always returns a true value.
 
@@ -1054,11 +1214,16 @@ the subscribe.
 =head2 C<unsubscribe>
 
 This unsubscribes you to a queue or topic. You must pass in a
-C<destination> or an C<id>:
+C<destination> (for STOMP version 1.0) or an C<id> (for STOMP versions
+1.1 and 1.2):
 
+  # STOMP 1.0
   $stomp->unsubcribe({ destination => '/queue/foo' });
+  # STOMP 1.1 and 1.2 (pass same 'id' as used in SUBSCRIBE)
+  $stomp->unsubcribe({ id => 'myfoosub' });
 
 Always returns a true value.
+
 
 =head2 C<receive_frame>
 
@@ -1074,6 +1239,17 @@ for a specified time pass a C<timeout> argument:
 
   # Wait half a second for a frame, else return undef
   $stomp->receive_frame({ timeout => 0.5 })
+
+If you are expecting a specific response pass the C<command> argument
+to indicate the type of message you need. If there are intermediate
+MESSAGE messages they will be buffered and returned on subsequent calls
+to receive_frame. If an ERROR frame is encountered it is still returned
+so in the example below you either get a RECEIPT message, an ERROR
+message or undef if the timeout is reached before a RECEIPT message
+arrives.
+
+  # Wait for RECEIPT response
+  $f = $stomp->receive_frame({ command => 'RECEIPT', timeout => 1.0 })
 
 =head2 C<can_read>
 
@@ -1096,6 +1272,26 @@ all frames before it> (if you are using client acknowledgements):
 
 Always returns a true value.
 
+The ACK message sent to the server uses different headers depending on
+the STOMP protocol version used.
+
+=over 4
+
+=item C<STOMP v1.2>
+The server provides an "ack" header and the ACK and NACK messages uses
+an "id" header with the same value as the "ack" header.
+
+=item C<STOMP v1.1>
+The server provides a "message-id" and "subscription" headers. The
+ACK and NACK messages uses corresponding "message-id" and "subscription"
+headers.
+
+=item C<STOMP v1.0>
+The server provides a "message-id" header. The ACK and NACK messages uses
+a corresponding "message-id" header.
+
+=back
+
 =head2 C<nack>
 
 This informs the remote end that you have been unable to process a
@@ -1105,7 +1301,8 @@ additional fields that can be passed to alter NACK behavior):
 
   $stomp->nack( { frame => $frame } );
 
-Always returns a true value.
+Always returns a true value. See also C<ack> for details around
+NACK message headers and STOMP protocol versions.
 
 =head2 C<send_frame>
 
