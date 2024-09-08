@@ -6,7 +6,7 @@ use Net::Stomp::Frame;
 use Carp qw(longmess);
 use base 'Class::Accessor::Fast';
 use Log::Any;
-our $VERSION = '0.63';
+our $VERSION = '0.63.1';
 
 __PACKAGE__->mk_accessors( qw(
     current_host failover hostname hosts port select serial session_id socket ssl
@@ -512,7 +512,12 @@ sub _read_data {
 
     if (defined $len && $len>0) {
         $self->{_framebuf_changed} = 1;
-        $self->{_alive} = time;
+        # NOTE: we explicitly don't update $self->{_alive} here because the
+        #       heartbeat/alive checks in brokers seem to only be based on
+        #       "has the client sent us data" not "has there been network
+        #       traffic to/from this client". So a receive-only client will
+        #       need to send heartbeats to maintain connectivity with such
+        #       brokers.
     }
     else {
         if (!defined $len) {
