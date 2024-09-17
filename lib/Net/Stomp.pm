@@ -173,6 +173,9 @@ sub _get_socket {
         $socket = $socket_class->new(%sockopts);
         binmode($socket) if $socket;
     }
+    if ($socket) { 
+        $self->logger->trace('socket address '.$socket->sockhost().':'.$socket->sockport()); 
+    } 
     if ($socket && $keep_alive) {
         require Socket;
         if (Socket->can('SO_KEEPALIVE')) {
