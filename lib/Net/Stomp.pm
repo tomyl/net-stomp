@@ -6,7 +6,7 @@ use Net::Stomp::Frame;
 use Carp qw(longmess);
 use base 'Class::Accessor::Fast';
 use Log::Any;
-our $VERSION = '0.63.1';
+our $VERSION = '0.63.2';
 
 __PACKAGE__->mk_accessors( qw(
     current_host failover hostname hosts port select serial session_id socket ssl
@@ -273,7 +273,7 @@ sub can_read {
 
     $conf ||= {};
     my $timeout = exists $conf->{timeout} ? $conf->{timeout} : $self->timeout;
-    return $self->select->can_read($timeout) || 0;
+    return ($self->ssl && $self->socket->pending()) || $self->select->can_read($timeout) || 0;
 }
 
 sub send {
@@ -508,7 +508,7 @@ sub send_heartbeat {
 sub _read_data {
     my ($self, $timeout) = @_;
 
-    return unless $self->select->can_read($timeout);
+    return unless ($self->ssl && $self->socket->pending()) || $self->select->can_read($timeout);
     my $len = $self->socket->sysread($self->{_framebuf},
                                      $self->bufsize,
                                      length($self->{_framebuf} || ''));
