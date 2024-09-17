@@ -2,11 +2,12 @@ package Net::Stomp;
 use strict;
 use warnings;
 use IO::Select;
+use POSIX qw(:errno_h);
 use Net::Stomp::Frame;
 use Carp qw(longmess);
 use base 'Class::Accessor::Fast';
 use Log::Any;
-our $VERSION = '0.63.2';
+our $VERSION = '0.63.3';
 
 __PACKAGE__->mk_accessors( qw(
     current_host failover hostname hosts port select serial session_id socket ssl
@@ -134,6 +135,7 @@ sub _get_connection {
 
     $self->select->remove($self->socket);
 
+    $socket->blocking(0);
     $self->select->add($socket);
     $self->socket($socket);
     $self->{_pid} = $$;
@@ -465,7 +467,24 @@ sub send_frame {
     while (length($to_write)) {
         local $SIG{PIPE}='IGNORE'; # just in case writing to a closed
                                    # socket kills us
-        $written = $self->socket->syswrite($to_write);
+        while (1) {
+            $written = $self->socket->syswrite($to_write);
+            if ($! == EWOULDBLOCK) {
+                next if !$self->ssl;
+                if ($IO::Socket::SSL::SSL_ERROR == &IO::Socket::SSL::SSL_WANT_WRITE) {
+                    $self->select->can_write();
+                    next;
+                }
+                if ($IO::Socket::SSL::SSL_ERROR == &IO::Socket::SSL::SSL_WANT_READ) {
+                    $self->select->can_read();
+                    next;
+                }
+                die "unexpected ssl error on syswrite: $IO::Socket::SSL::SSL_ERROR";
+            }
+
+            last;
+        }
+
         last unless defined $written;
         substr($to_write,0,$written,'');
     }
@@ -509,9 +528,27 @@ sub _read_data {
     my ($self, $timeout) = @_;
 
     return unless $self->ssl && $self->socket->pending() || $self->select->can_read($timeout);
-    my $len = $self->socket->sysread($self->{_framebuf},
+
+    my $len;
+    while (1) {
+        $len = $self->socket->sysread($self->{_framebuf},
                                      $self->bufsize,
                                      length($self->{_framebuf} || ''));
+        if ($! == EWOULDBLOCK) {
+            next if !$self->ssl;
+            if ($IO::Socket::SSL::SSL_ERROR == &IO::Socket::SSL::SSL_WANT_READ) {
+                $self->select->can_read();
+                next;
+            }
+            if ($IO::Socket::SSL::SSL_ERROR == &IO::Socket::SSL::SSL_WANT_WRITE) {
+                $self->select->can_write();
+                next;
+            }
+            die "unexpected ssl error on sysread: $IO::Socket::SSL::SSL_ERROR";
+        }
+
+        last;
+    }
 
     if (defined $len && $len>0) {
         $self->{_framebuf_changed} = 1;
